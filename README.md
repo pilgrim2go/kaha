@@ -42,6 +42,10 @@ remove_fields = ["field1","field2"] # Name of keys that should be removed e.g. [
 
 # Run
 ## Default (reads "kaha.toml" file from current directory)
-```kaha```
+```
+kaha
+```
 ## Custom config file
-```kaha -config configfile.toml```
+```
+kaha -config configfile.toml
+```
