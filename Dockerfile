@@ -30,6 +30,3 @@ RUN \
     rm -f go$GOLANG_VERSION.linux-amd64.tar.gz
 
 ENV PATH=/usr/local/go/bin:$PATH
-
-RUN \
-    go version
