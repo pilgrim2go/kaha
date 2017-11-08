@@ -1,0 +1,18 @@
+[Kafka]
+broker = "kafka:9092"
+group = "test_group"
+topics = ["example.topic_name"]
+consumers = 2
+batch_size = 10000
+
+[Clickhouse]
+node = "http://clickhouse:8123"
+db_table = "db_name.table_name"
+timeout_seconds = 15
+retry_attempts = 3
+backoff_time_seconds = 1
+
+[Process]
+remove_fields = ["field1","field2"]
+[Process.FlatFields]
+"parent.child" = "parent_child"
