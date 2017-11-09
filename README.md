@@ -23,8 +23,12 @@ Binary file: "kaha" will be created in current directory
 [Kafka]
 broker = "kafka:9092" # Broker address format: "host:port"
 group = "test_group"
-topics = ["example.topic_name"]
+topics = ["example.topic_name", "example.topic_other"]
 consumers = 2 # How many consumers to start (best performence = number of partitions)
+auto_commit = true # true/false If true the consumer's offset will be periodically committed in the background
+auto_commit_interval_ms = 5000 # How often offset will be commited If auto_commit is enabled 
+auto_offset_reset = "earliest" #  Initial offset: latest, earliest, none 
+session_timeout_ms = 6000 #  Timeout used to detect consumer failures 
 batch_size = 10000 # Number of messages for bulk processing 
 
 [Clickhouse]

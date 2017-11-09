@@ -3,6 +3,10 @@ broker = "kafka:9092"
 group = "test_group"
 topics = ["example.topic_name"]
 consumers = 2
+auto_commit = true
+auto_commit_interval_ms = 5000
+auto_offset_reset = "earliest"
+session_timeout_ms = 6000
 batch_size = 10000
 
 [Clickhouse]

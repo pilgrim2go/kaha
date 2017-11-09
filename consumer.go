@@ -13,8 +13,9 @@ import (
 type ProcessMessagesFunc func([]*kafka.Message) error
 
 type Consumer struct {
-	cfg     *KafkaConfig
-	process ProcessMessagesFunc
+	autocommit bool
+	batch      int
+	process    ProcessMessagesFunc
 	*kafka.Consumer
 
 	wg     *sync.WaitGroup
@@ -26,11 +27,12 @@ func NewConsumer(cfg *KafkaConfig, processBatch ProcessMessagesFunc, wg *sync.Wa
 	c, err := kafka.NewConsumer(&kafka.ConfigMap{
 		"bootstrap.servers":               cfg.Broker,
 		"group.id":                        cfg.Group,
-		"session.timeout.ms":              6000,
+		"session.timeout.ms":              cfg.SessionTimeout,
 		"go.events.channel.enable":        true,
 		"go.application.rebalance.enable": true,
-		"enable.auto.commit":              false,
-		"default.topic.config":            kafka.ConfigMap{"auto.offset.reset": "earliest"}})
+		"enable.auto.commit":              cfg.AutoCommit,
+		"auto.commit.interval.ms":         cfg.AutoCommitInterval,
+		"default.topic.config":            kafka.ConfigMap{"auto.offset.reset": cfg.AutoOffsetReset}})
 
 	if err != nil {
 		return nil, fmt.Errorf("could not create consumer: %s", err)
@@ -42,17 +44,18 @@ func NewConsumer(cfg *KafkaConfig, processBatch ProcessMessagesFunc, wg *sync.Wa
 		return nil, fmt.Errorf("could not to subscribe to topics: %s %s", cfg.Topics, err)
 	}
 	return &Consumer{
-		cfg:      cfg,
-		process:  processBatch,
-		Consumer: c,
-		wg:       wg,
-		quit:     quit,
-		logger:   logger,
+		autocommit: cfg.AutoCommit,
+		batch:      cfg.Batch,
+		process:    processBatch,
+		Consumer:   c,
+		wg:         wg,
+		quit:       quit,
+		logger:     logger,
 	}, nil
 }
 
 func (kc *Consumer) Feed() {
-	batch := make([]*kafka.Message, 0, kc.cfg.Batch)
+	batch := make([]*kafka.Message, 0, kc.batch)
 	run := true
 
 	errHandle := func(err error) {
@@ -74,22 +77,25 @@ func (kc *Consumer) Feed() {
 				kc.Unassign()
 			case *kafka.Message:
 				batch = append(batch, e)
-				if len(batch) != kc.cfg.Batch {
+				if len(batch) != kc.batch {
 					continue
 				}
 
 				start := time.Now()
-				kc.logger.Printf("processing batch size: %v ", kc.cfg.Batch)
+				kc.logger.Printf("processing batch size: %v ", kc.batch)
 
 				if err := kc.process(batch); err != nil {
 					errHandle(fmt.Errorf("could not process batch: %v", err))
 					continue
 				}
 
-				if _, err := kc.CommitOffsets(getOffsets(batch)); err != nil {
-					errHandle(fmt.Errorf("could not commit offsets: %v", err))
-					continue
+				if kc.autocommit {
+					if _, err := kc.CommitOffsets(getOffsets(batch)); err != nil {
+						errHandle(fmt.Errorf("could not commit offsets: %v", err))
+						continue
+					}
 				}
+
 				batch = batch[:0] // trim back to zero size
 				kc.logger.Printf("batch processed time: %v\n", time.Since(start))
 			case kafka.PartitionEOF:

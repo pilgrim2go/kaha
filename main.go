@@ -23,11 +23,15 @@ type ProcessConfig struct {
 }
 
 type KafkaConfig struct {
-	Broker    string   `toml:"broker"`
-	Group     string   `toml:"group"`
-	Topics    []string `toml:"topics"`
-	Consumers int      `toml:"consumers"`
-	Batch     int      `toml:"batch_size"`
+	Broker             string   `toml:"broker"`
+	Group              string   `toml:"group"`
+	Topics             []string `toml:"topics"`
+	Consumers          int      `toml:"consumers"`
+	AutoCommit         bool     `toml:"auto_commit"`
+	AutoCommitInterval int      `toml:"auto_commit_interval_ms"`
+	AutoOffsetReset    string   `toml:"auto_offset_reset"`
+	SessionTimeout     int      `toml:"session_timeout_ms"`
+	Batch              int      `toml:"batch_size"`
 }
 
 type ClickhouseConfig struct {
