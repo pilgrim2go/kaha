@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"log"
 	"math/rand"
 	"net/http"
@@ -33,18 +32,14 @@ func (c *Clickhouse) GetColumns(dbTableName string) (columns []string, err error
 		Data []map[string]string `json:"data"`
 	}
 
-	resp, err := c.Do(http.MethodGet, fmt.Sprintf("/?query=DESCRIBE%%20%s%%20FORMAT%%20JSON", dbTableName), nil, "applicaiton/json")
+	var desc describeTable
+
+	err = c.Do(http.MethodGet, fmt.Sprintf("/?query=DESCRIBE%%20%s%%20FORMAT%%20JSON", dbTableName), nil, "applicaiton/json", &desc)
 	if err != nil {
 		return nil, fmt.Errorf("could not get describe of %s: %v", dbTableName, err)
 	}
 
-	var describe describeTable
-
-	if err := json.Unmarshal(resp, &describe); err != nil {
-		return nil, fmt.Errorf("could not parse describe of %s: %v", dbTableName, err)
-	}
-
-	for _, column := range describe.Data {
+	for _, column := range desc.Data {
 		for key, value := range column {
 			if key == "name" {
 				columns = append(columns, value)
@@ -62,39 +57,40 @@ func (c *Clickhouse) InsertIntoJSONEachRow(dbTableName string, rows [][]byte) er
 		b = append(b, []byte("\n")...)
 	}
 
-	if _, err := c.Do(http.MethodPost,
+	if err := c.Do(http.MethodPost,
 		fmt.Sprintf("/?query=INSERT%%20INTO%%20%s%%20FORMAT%%20JSONEachRow", dbTableName),
 		bytes.NewBuffer(b),
-		"text/plain"); err != nil {
+		"text/plain",
+		nil); err != nil {
 		return fmt.Errorf("could not post rows to %s: %v", dbTableName, err)
 	}
 	return nil
 }
 
-func (c *Clickhouse) Do(httpMethod string, uri string, payload io.Reader, contentType string) (body []byte, err error) {
+// Do Make request and if resp contains data unmarshall it to v
+func (c *Clickhouse) Do(httpMethod string, uri string, payload io.Reader, contentType string, v interface{}) (err error) {
 	req, err := http.NewRequest(httpMethod, uri, payload)
 	req.Header.Set("Content-Type", contentType)
 
 	if err != nil {
-		return nil, err
+		return err
 	}
 
 	resp, err := c.Client.Do(req)
 	if err != nil {
-		return nil, err
+		return err
 	}
 
 	defer resp.Body.Close()
 
-	body, err = ioutil.ReadAll(resp.Body)
-	if err != nil {
-		return nil, err
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("bad response from server: %s", resp.Status)
+	}
+	if v == nil {
+		return nil
 	}
 
-	if resp.StatusCode != http.StatusOK {
-		return body, fmt.Errorf("bad response from server: %s", resp.Status)
-	}
-	return body, nil
+	return json.NewDecoder(resp.Body).Decode(v)
 }
 
 // A Client sends http.Requests and returns http.Responses or errors in
