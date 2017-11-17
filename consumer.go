@@ -137,7 +137,9 @@ func processBatch(clickh *Clickhouse, kc *ProcessConfig, dbTableName string, tab
 
 			msg.FlatFields(kc.RenameFields)
 			msg.RemoveFields(kc.RemoveFields)
-			msg.SubMatchValues(kc.SubMatchValues)
+			if err := msg.SubMatchValues(kc.SubMatchValues); err != nil {
+				return fmt.Errorf("could not submatch values: %v", err)
+			}
 			reducedFields := msg.ReduceFields(tableColumns)
 			l.logReduced(reducedFields)
 			msg.RemoveEmptyFields()
