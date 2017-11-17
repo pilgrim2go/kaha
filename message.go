@@ -57,7 +57,7 @@ func (m Message) SubMatchValues(fieldRegexp map[string]string) error {
 					return fmt.Errorf("Field: %s value: %s is not convertable to int", field, substr)
 				}
 			case string:
-				m[field] = rgx.FindStringSubmatch(v)
+				m[field] = strings.Join(rgx.FindStringSubmatch(v), "")
 			default:
 				return fmt.Errorf("Field: %s value %v is not convertable to string or int", field, v)
 			}
