@@ -1,6 +1,11 @@
 package main
 
-import "strings"
+import (
+	"fmt"
+	"regexp"
+	"strconv"
+	"strings"
+)
 
 type Message map[string]interface{}
 
@@ -36,6 +41,31 @@ func (m Message) FlatFields(pathName map[string]string) {
 		}
 	}
 }
+
+func (m Message) SubMatchValues(fieldRegexp map[string]string) error {
+	for field, strgxp := range fieldRegexp {
+		if value, ok := m[field]; ok {
+			rgx := regexp.MustCompile(strgxp)
+
+			switch v := value.(type) {
+			case int:
+				str := strconv.Itoa(v)
+				substr := strings.Join(rgx.FindStringSubmatch(str), "")
+				if i, err := strconv.Atoi(substr); err == nil {
+					m[field] = i
+				} else {
+					return fmt.Errorf("Field: %s value: %s is not convertable to int", field, substr)
+				}
+			case string:
+				m[field] = rgx.FindStringSubmatch(v)
+			default:
+				return fmt.Errorf("Field: %s value %v is not convertable to string or int", field, v)
+			}
+		}
+	}
+	return nil
+}
+
 func strInSlice(str string, list []string) bool {
 	for _, v := range list {
 		if v == str {

@@ -135,8 +135,9 @@ func processBatch(clickh *Clickhouse, kc *ProcessConfig, dbTableName string, tab
 				return fmt.Errorf("could not parse message: %v", err)
 			}
 
-			msg.FlatFields(kc.FlatFields)
+			msg.FlatFields(kc.RenameFields)
 			msg.RemoveFields(kc.RemoveFields)
+			msg.SubMatchValues(kc.SubMatchValues)
 			reducedFields := msg.ReduceFields(tableColumns)
 			l.logReduced(reducedFields)
 			msg.RemoveEmptyFields()

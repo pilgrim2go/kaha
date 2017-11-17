@@ -18,5 +18,8 @@ backoff_time_seconds = 1
 
 [Process]
 remove_fields = ["field1","field2"]
-[Process.FlatFields]
+[Process.RenameFields]
 "parent.child" = "parent_child"
+[Process.SubMatchValues]
+"fieldName" = "regexp"
+

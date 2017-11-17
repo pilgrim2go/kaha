@@ -18,8 +18,9 @@ type Config struct {
 }
 
 type ProcessConfig struct {
-	FlatFields   map[string]string `toml:"FlatFields`
-	RemoveFields []string          `toml:"remove_fields"`
+	RenameFields   map[string]string `toml:"RenameFields`
+	SubMatchValues map[string]string `toml:"SubMatchValues`
+	RemoveFields   []string          `toml:"remove_fields"`
 }
 
 type KafkaConfig struct {
