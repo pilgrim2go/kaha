@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"io/ioutil"
 	"log"
 	"math/rand"
 	"net/http"
@@ -83,14 +84,20 @@ func (c *Clickhouse) Do(httpMethod string, uri string, payload io.Reader, conten
 
 	defer resp.Body.Close()
 
-	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("bad response from server: %s", resp.Status)
+	body, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		return err
 	}
+
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("bad response from server: %s message: %s", resp.Status, body)
+	}
+
 	if v == nil {
 		return nil
 	}
 
-	return json.NewDecoder(resp.Body).Decode(v)
+	return json.Unmarshal(body, v)
 }
 
 // A Client sends http.Requests and returns http.Responses or errors in
