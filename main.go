@@ -24,7 +24,7 @@ type ProcessConfig struct {
 }
 
 type KafkaConfig struct {
-	Broker             string   `toml:"broker"`
+	Brokers            []string `toml:"brokers"`
 	Group              string   `toml:"group"`
 	Topics             []string `toml:"topics"`
 	Consumers          int      `toml:"consumers"`
@@ -53,8 +53,13 @@ func main() {
 	if err != nil {
 		logger.Fatal(err)
 	}
-
-	clickh := NewClickhouse(&http.Client{Timeout: time.Second * time.Duration(cfg.Clickhouse.TimeOut)},
+	clickh := NewClickhouse(&http.Client{
+		Timeout: time.Second * time.Duration(cfg.Clickhouse.TimeOut),
+		Transport: &http.Transport{
+			MaxIdleConns:        cfg.Kafka.Consumers,
+			MaxIdleConnsPerHost: cfg.Kafka.Consumers,
+		},
+	},
 		cfg.Clickhouse.Node,
 		cfg.Clickhouse.RetryAttempts,
 		time.Second*time.Duration(cfg.Clickhouse.BackoffTime),

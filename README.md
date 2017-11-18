@@ -21,7 +21,7 @@ Binary file: "kaha" will be created in current directory
 ## Rename or copy example.kaha.toml to kaha.toml
 ```
 [Kafka]
-broker = "kafka:9092" # Broker address format: "host:port"
+brokers = ["kafka1:9092","kafka2:9092"] # Brokers address format: "host:port"
 group = "test_group"
 topics = ["example.topic_name", "example.topic_other"]
 consumers = 2 # How many consumers to start (best performence = number of partitions)
@@ -40,8 +40,10 @@ backoff_time_seconds = 1 # How many seconds to wait until next retry
 
 [Process] # Simple Kafka json messages processing
 remove_fields = ["field1","field2"] # Name of keys that should be removed e.g. ["field1","field2"] means -> {"field1": "value", "field2: "value", "field3": "value"} will be transformed to {"field3": value"}
-[Process.FlatFields]
-"parent.child" = "parent_child" # Name of keys that should be flatten/renamed e.g. "parent.child" means -> {"parent": {"child": "value"}} will be transformed to {"paren_child": "value}
+[Process.RenameFields]
+"parent.child" = "parent_child" # Name of keys that should be flatten/renamed e.g. "parent.child" = "parent_child"  means -> {"parent": {"child": "value"}} will be transformed to {"paren_child": "value}
+[Process.SubMatchValues]
+"key" = "regexp" # Name of keys which values should be submatched e.g. "type" = ".{2}" meens -> {"type": "12345"} will be transformed to {"type": "12"}
 ```
 
 # Run

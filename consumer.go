@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"regexp"
+	"strings"
 	"sync"
 	"time"
 
@@ -26,7 +27,7 @@ type Consumer struct {
 
 func NewConsumer(cfg *KafkaConfig, processBatch ProcessMessagesFunc, wg *sync.WaitGroup, quit chan bool, logger *log.Logger) (*Consumer, error) {
 	c, err := kafka.NewConsumer(&kafka.ConfigMap{
-		"bootstrap.servers":               cfg.Broker,
+		"bootstrap.servers":               strings.Join(cfg.Brokers, ","),
 		"group.id":                        cfg.Group,
 		"session.timeout.ms":              cfg.SessionTimeout,
 		"go.events.channel.enable":        true,
