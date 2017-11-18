@@ -143,7 +143,13 @@ func FaultTolerance(attempts int, backoff time.Duration) Decorator {
 				if res, err = c.Do(r); err == nil {
 					break
 				}
-				time.Sleep(backoff * time.Duration(i))
+				slow := 1
+				// Code: 252 DB::Exception: Too many parts (300). Merges are processing significantly slower than inserts
+				// This error needs longer backoff time
+				if strings.HasPrefix(err.Error(), "Code: 252") {
+					slow = 10
+				}
+				time.Sleep(backoff * time.Duration(i) * time.Duration(slow))
 			}
 			return res, err
 		})
