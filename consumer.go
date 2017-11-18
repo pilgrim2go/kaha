@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"regexp"
 	"sync"
 	"time"
 
@@ -125,7 +126,13 @@ func (kc *Consumer) Feed() {
 	kc.wg.Done()
 }
 
-func processBatch(clickh *Clickhouse, kc *ProcessConfig, dbTableName string, tableColumns []string, l *logReducedFields) ProcessMessagesFunc {
+func processBatch(clickh *Clickhouse, pc *ProcessConfig, dbTableName string, tableColumns []string, l *logReducedFields) ProcessMessagesFunc {
+	rgxps := make(map[string]*regexp.Regexp)
+	if len(pc.SubMatchValues) > 0 {
+		for field, rgxp := range pc.SubMatchValues {
+			rgxps[field] = regexp.MustCompile(rgxp)
+		}
+	}
 	return func(batch []*kafka.Message) error {
 		var rows [][]byte
 
@@ -135,9 +142,9 @@ func processBatch(clickh *Clickhouse, kc *ProcessConfig, dbTableName string, tab
 				return fmt.Errorf("could not parse message: %v", err)
 			}
 
-			msg.FlatFields(kc.RenameFields)
-			msg.RemoveFields(kc.RemoveFields)
-			if err := msg.SubMatchValues(kc.SubMatchValues); err != nil {
+			msg.FlatFields(pc.RenameFields)
+			msg.RemoveFields(pc.RemoveFields)
+			if err := msg.SubMatchValues(rgxps); err != nil {
 				return fmt.Errorf("could not submatch values: %v", err)
 			}
 			reducedFields := msg.ReduceFields(tableColumns)

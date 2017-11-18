@@ -42,24 +42,26 @@ func (m Message) FlatFields(pathName map[string]string) {
 	}
 }
 
-func (m Message) SubMatchValues(fieldRegexp map[string]string) error {
-	for field, strgxp := range fieldRegexp {
-		if value, ok := m[field]; ok {
-			rgx := regexp.MustCompile(strgxp)
+func (m Message) SubMatchValues(nameRegexp map[string]*regexp.Regexp) error {
+	for name, rgxp := range nameRegexp {
+		if rgxp == nil {
+			return fmt.Errorf("Field: %s regexp could not be nil", name)
+		}
 
+		if value, ok := m[name]; ok {
 			switch v := value.(type) {
 			case int:
 				str := strconv.Itoa(v)
-				substr := strings.Join(rgx.FindStringSubmatch(str), "")
+				substr := strings.Join(rgxp.FindStringSubmatch(str), "")
 				if i, err := strconv.Atoi(substr); err == nil {
-					m[field] = i
+					m[name] = i
 				} else {
-					return fmt.Errorf("Field: %s value: %s is not convertable to int", field, substr)
+					return fmt.Errorf("Field: %s value: %s is not convertable to int", name, substr)
 				}
 			case string:
-				m[field] = strings.Join(rgx.FindStringSubmatch(v), "")
+				m[name] = strings.Join(rgxp.FindStringSubmatch(v), "")
 			default:
-				return fmt.Errorf("Field: %s value %v is not convertable to string or int", field, v)
+				return fmt.Errorf("Field: %s value %v is not convertable to string or int", name, v)
 			}
 		}
 	}
