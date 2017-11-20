@@ -91,7 +91,7 @@ func (kc *Consumer) Feed() {
 					continue
 				}
 
-				if kc.autocommit {
+				if !kc.autocommit {
 					if _, err := kc.CommitOffsets(getOffsets(batch)); err != nil {
 						errHandle(fmt.Errorf("could not commit offsets: %v", err))
 						continue
