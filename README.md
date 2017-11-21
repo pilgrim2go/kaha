@@ -43,7 +43,7 @@ remove_fields = ["field1","field2"] # Name of keys that should be removed e.g. [
 [Process.RenameFields]
 "parent.child" = "parent_child" # Name of keys that should be flatten/renamed e.g. "parent.child" = "parent_child"  means -> {"parent": {"child": "value"}} will be transformed to {"paren_child": "value}
 [Process.SubMatchValues]
-"key" = "regexp" # Name of keys which values should be submatched e.g. "type" = ".{2}" meens -> {"type": "12345"} will be transformed to {"type": "12"}
+"key" = "regexp" # Name of keys which values should be submatched e.g. "type" = ".{2}" means -> {"type": "12345"} will be transformed to {"type": "12"}
 ```
 
 # Run
