@@ -110,5 +110,5 @@ func main() {
 		consumers[i] = consumer
 	}
 
-	RunConsumer(logger, consumers...)
+	RunConsumer(logger, *cliDebug, consumers...)
 }

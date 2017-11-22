@@ -61,7 +61,7 @@ func NewConsumerConfig(cfg *KafkaConsumerConfig) *kafka.ConfigMap {
 		"default.topic.config":            kafka.ConfigMap{"auto.offset.reset": cfg.AutoOffsetReset}}
 }
 
-func (c *Consumer) Consume(wg *sync.WaitGroup, quit chan bool) {
+func (c *Consumer) Consume(wg *sync.WaitGroup, quit chan bool, logEOF bool) {
 	shutDown := func(err error) {
 		if err != nil {
 			c.logger.Println(err)
@@ -122,7 +122,9 @@ func (c *Consumer) Consume(wg *sync.WaitGroup, quit chan bool) {
 
 				messages = messages[:0] // trim back to zero size
 			case kafka.PartitionEOF:
-				c.logger.Printf("reached %v\n", e)
+				if logEOF {
+					c.logger.Printf("reached %v\n", e)
+				}
 			case kafka.Error:
 				shutDown(e)
 				return
@@ -131,7 +133,7 @@ func (c *Consumer) Consume(wg *sync.WaitGroup, quit chan bool) {
 	}
 }
 
-func RunConsumer(logger *log.Logger, consumer ...*Consumer) {
+func RunConsumer(logger *log.Logger, logEOF bool, consumer ...*Consumer) {
 	quitPool := make(chan chan bool, len(consumer))
 	var wg sync.WaitGroup
 
@@ -140,7 +142,7 @@ func RunConsumer(logger *log.Logger, consumer ...*Consumer) {
 		quitPool <- q
 
 		wg.Add(1)
-		go c.Consume(&wg, q)
+		go c.Consume(&wg, q, logEOF)
 		logger.Printf("started consumer: %v\n", c.Consumer)
 	}
 
