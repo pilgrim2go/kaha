@@ -61,7 +61,7 @@ func NewConsumerConfig(cfg *KafkaConsumerConfig) *kafka.ConfigMap {
 		"default.topic.config":            kafka.ConfigMap{"auto.offset.reset": cfg.AutoOffsetReset}}
 }
 
-func (c *Consumer) consume(wg *sync.WaitGroup, quit chan bool) {
+func (c *Consumer) Consume(wg *sync.WaitGroup, quit chan bool) {
 	shutDown := func(err error) {
 		if err != nil {
 			c.logger.Println(err)
@@ -140,7 +140,7 @@ func RunConsumer(logger *log.Logger, consumer ...*Consumer) {
 		quitPool <- q
 
 		wg.Add(1)
-		go c.consume(&wg, q)
+		go c.Consume(&wg, q)
 		logger.Printf("started consumer: %v\n", c.Consumer)
 	}
 
