@@ -22,7 +22,7 @@ type Clickhouse struct {
 // NewClickhouse create new client
 func NewClickhouse(client *http.Client, host string, attempts int, backoff time.Duration, l *log.Logger) *Clickhouse {
 	decorators := []Decorator{
-		ApiAddr(host),
+		APIAddr(host),
 		FaultTolerance(attempts, backoff),
 	}
 	if l != nil {
@@ -163,8 +163,8 @@ func FaultTolerance(attempts int, backoff time.Duration) Decorator {
 	}
 }
 
-// ApiAddr Add API address to request
-func ApiAddr(apiAddr string) Decorator {
+// APIAddr Add API address to request
+func APIAddr(apiAddr string) Decorator {
 	return func(c Client) Client {
 		return ClientFunc(func(r *http.Request) (*http.Response, error) {
 			if strings.HasPrefix(r.URL.String(), apiAddr) {
