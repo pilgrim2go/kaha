@@ -55,3 +55,7 @@ kaha
 ```
 kaha -config configfile.toml
 ```
+## Debug - more verbose logging
+```
+kaha -debug
+```
