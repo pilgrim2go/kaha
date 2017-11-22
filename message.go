@@ -51,7 +51,7 @@ func (m Message) RenameFields(pathName map[string]string) {
 func (m Message) SubMatchValues(nameRegexp map[string]*regexp.Regexp) error {
 	for name, rgxp := range nameRegexp {
 		if rgxp == nil {
-			return fmt.Errorf("Field: %s regexp could not be nil", name)
+			return fmt.Errorf("field: %s regexp could not be nil", name)
 		}
 
 		if value, ok := m[name]; ok {
@@ -62,12 +62,12 @@ func (m Message) SubMatchValues(nameRegexp map[string]*regexp.Regexp) error {
 				if i, err := strconv.Atoi(substr); err == nil {
 					m[name] = i
 				} else {
-					return fmt.Errorf("Field: %s value: %s is not convertable to int", name, substr)
+					return fmt.Errorf("field: %s value: %s is not convertable to int", name, substr)
 				}
 			case string:
 				m[name] = strings.Join(rgxp.FindStringSubmatch(v), "")
 			default:
-				return fmt.Errorf("Field: %s value %v is not convertable to string or int", name, v)
+				return fmt.Errorf("field: %s value %v is not convertable to string or int", name, v)
 			}
 		}
 	}
