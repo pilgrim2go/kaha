@@ -34,24 +34,24 @@ func loadConfig(f string) (cfg Config, err error) {
 	return cfg, nil
 }
 
-type logReducedFields struct {
+type LogReducedFields struct {
 	logged map[string]bool
-	logger *log.Logger
+	*log.Logger
 }
 
-func (l *logReducedFields) logReduced(fields map[string]interface{}) {
+func (l *LogReducedFields) LogReduced(fields map[string]interface{}) {
 	for key, value := range fields {
 		if _, ok := l.logged[key]; ok {
 			continue
 		}
-		l.logger.Printf("reduced field %s: %v", key, value)
+		l.Printf("reduced field %s: %v", key, value)
 		l.logged[key] = true
 	}
 }
 
-func newLogReducedFields(l *log.Logger) *logReducedFields {
-	return &logReducedFields{
+func NewLogReducedFields(l *log.Logger) *LogReducedFields {
+	return &LogReducedFields{
 		logged: make(map[string]bool),
-		logger: l,
+		Logger: l,
 	}
 }

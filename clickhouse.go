@@ -18,13 +18,16 @@ type Clickhouse struct {
 	Client Client
 }
 
-func NewClickhouse(client *http.Client, host string, attempts int, backoff time.Duration, log *log.Logger) *Clickhouse {
-	c := Decorate(client,
-		Logging(log),
+func NewClickhouse(client *http.Client, host string, attempts int, backoff time.Duration, l *log.Logger) *Clickhouse {
+	decorators := []Decorator{
 		ApiAddr(host),
-		FaultTolerance(attempts, backoff))
+		FaultTolerance(attempts, backoff),
+	}
+	if l != nil {
+		decorators = append([]Decorator{Logging(l)}, decorators...)
+	}
 	return &Clickhouse{
-		Client: c,
+		Client: Decorate(client, decorators...),
 	}
 }
 
@@ -35,7 +38,7 @@ func (c *Clickhouse) GetColumns(dbTableName string) (columns []string, err error
 
 	var desc describeTable
 
-	err = c.Do(http.MethodGet, fmt.Sprintf("/?query=DESCRIBE%%20%s%%20FORMAT%%20JSON", dbTableName), nil, "applicaiton/json", &desc)
+	err = c.Do(http.MethodGet, nil, "applicaiton/json", &desc, "/?query=DESCRIBE%%20%s%%20FORMAT%%20JSON", dbTableName)
 	if err != nil {
 		return nil, fmt.Errorf("could not get describe of %s: %v", dbTableName, err)
 	}
@@ -59,18 +62,18 @@ func (c *Clickhouse) InsertIntoJSONEachRow(dbTableName string, rows [][]byte) er
 	}
 
 	if err := c.Do(http.MethodPost,
-		fmt.Sprintf("/?query=INSERT%%20INTO%%20%s%%20FORMAT%%20JSONEachRow", dbTableName),
 		bytes.NewBuffer(b),
 		"text/plain",
-		nil); err != nil {
+		nil,
+		"/?query=INSERT%%20INTO%%20%s%%20FORMAT%%20JSONEachRow", dbTableName); err != nil {
 		return fmt.Errorf("could not post rows to %s: %v", dbTableName, err)
 	}
 	return nil
 }
 
 // Do Make request and if resp contains data unmarshall it to v
-func (c *Clickhouse) Do(httpMethod string, uri string, payload io.Reader, contentType string, v interface{}) (err error) {
-	req, err := http.NewRequest(httpMethod, uri, payload)
+func (c *Clickhouse) Do(httpMethod string, payload io.Reader, contentType string, v interface{}, uriFormat string, args ...interface{}) (err error) {
+	req, err := http.NewRequest(httpMethod, fmt.Sprintf(uriFormat, args...), payload)
 	req.Header.Set("Content-Type", contentType)
 
 	if err != nil {

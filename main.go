@@ -3,11 +3,8 @@ package main
 import (
 	"flag"
 	"fmt"
+	"log"
 	"net/http"
-	"os"
-	"os/signal"
-	"sync"
-	"syscall"
 	"time"
 )
 
@@ -24,15 +21,23 @@ type ProcessConfig struct {
 }
 
 type KafkaConfig struct {
+	KafkaProcessConfig
+	KafkaConsumerConfig
+}
+
+type KafkaProcessConfig struct {
+	Topics    []string `toml:"topics"`
+	Consumers int      `toml:"consumers"`
+	Batch     int      `toml:"batch_size"`
+}
+
+type KafkaConsumerConfig struct {
 	Brokers            []string `toml:"brokers"`
 	Group              string   `toml:"group"`
-	Topics             []string `toml:"topics"`
-	Consumers          int      `toml:"consumers"`
 	AutoCommit         bool     `toml:"auto_commit"`
 	AutoCommitInterval int      `toml:"auto_commit_interval_ms"`
 	AutoOffsetReset    string   `toml:"auto_offset_reset"`
 	SessionTimeout     int      `toml:"session_timeout_ms"`
-	Batch              int      `toml:"batch_size"`
 }
 
 type ClickhouseConfig struct {
@@ -45,6 +50,7 @@ type ClickhouseConfig struct {
 
 func main() {
 	cliConfig := flag.String("config", "kaha.toml", "Kaha feeder config file path")
+	cliDebug := flag.Bool("debug", false, "Debug mode")
 	flag.Parse()
 
 	var logger = NewLog("kaha", 0)
@@ -53,6 +59,13 @@ func main() {
 	if err != nil {
 		logger.Fatal(err)
 	}
+
+	var clickLogger *log.Logger
+
+	if *cliDebug {
+		clickLogger = NewLog("kaha clickhouse", 0)
+	}
+
 	clickh := NewClickhouse(&http.Client{
 		Timeout: time.Second * time.Duration(cfg.Clickhouse.TimeOut),
 		Transport: &http.Transport{
@@ -63,56 +76,39 @@ func main() {
 		cfg.Clickhouse.Node,
 		cfg.Clickhouse.RetryAttempts,
 		time.Second*time.Duration(cfg.Clickhouse.BackoffTime),
-		NewLog("kaha clickhouse", 0))
+		clickLogger,
+	)
 
-	tableColumns, err := clickh.GetColumns(cfg.Clickhouse.DbTable)
-
-	if err != nil {
-		logger.Fatal(err)
-	}
-
-	quitPool := make(chan chan bool, cfg.Kafka.Consumers)
-	var wg sync.WaitGroup
+	consumers := make([]*Consumer, cfg.Kafka.Consumers)
 
 	for i := 0; i < cfg.Kafka.Consumers; i++ {
-		q := make(chan bool)
-		quitPool <- q
+		if err != nil {
+			logger.Fatal(err)
+		}
+		consumeLog := NewLog(fmt.Sprintf("kaha consumer-%v", i+1), 0)
+
+		process := ProcessBatch(clickh,
+			&cfg.ProcessConfig,
+			cfg.Clickhouse.DbTable,
+			NewLogReducedFields(logger))
+
+		if *cliDebug {
+			process = LogProcessBatch(consumeLog, process)
+		}
+
 		consumer, err := NewConsumer(
-			&cfg.Kafka,
-			processBatch(clickh,
-				&cfg.ProcessConfig,
-				cfg.Clickhouse.DbTable,
-				tableColumns,
-				newLogReducedFields(logger)),
-			&wg,
-			q,
-			NewLog(fmt.Sprintf("kaha consumer-%v", i+1), 0),
+			NewConsumerConfig(&cfg.Kafka.KafkaConsumerConfig),
+			cfg.Kafka.Topics,
+			cfg.Kafka.AutoCommit,
+			cfg.Kafka.Batch,
+			process,
+			consumeLog,
 		)
 		if err != nil {
 			logger.Fatal(err)
 		}
-		wg.Add(1)
-		go consumer.Feed()
-		logger.Printf("created consumer: %v\n", consumer.Consumer)
+		consumers[i] = consumer
 	}
 
-	osSignals := make(chan os.Signal, 1)
-	signal.Notify(osSignals, syscall.SIGINT, syscall.SIGTERM)
-
-	go func() {
-		for {
-			select {
-			case sig := <-osSignals:
-				logger.Printf("Caught signal %v: terminating\n", sig)
-				for len(quitPool) != 0 {
-					q := <-quitPool
-					q <- true
-				}
-				return
-			}
-		}
-	}()
-
-	wg.Wait()
-	logger.Println("all consumers closed")
+	RunConsumer(logger, consumers...)
 }
