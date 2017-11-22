@@ -3,35 +3,43 @@ package main
 import (
 	"flag"
 	"fmt"
+	"io/ioutil"
 	"log"
 	"net/http"
 	"time"
+
+	"github.com/BurntSushi/toml"
 )
 
+// Config all
 type Config struct {
 	Kafka         KafkaConfig      `toml:"Kafka"`
 	Clickhouse    ClickhouseConfig `toml:"Clickhouse"`
 	ProcessConfig `toml:"Process"`
 }
 
+// ProcessConfig message mutate options
 type ProcessConfig struct {
-	RenameFields   map[string]string `toml:"RenameFields`
-	SubMatchValues map[string]string `toml:"SubMatchValues`
+	RenameFields   map[string]string `toml:"RenameFields"`
+	SubMatchValues map[string]string `toml:"SubMatchValues"`
 	RemoveFields   []string          `toml:"remove_fields"`
 }
 
+// KafkaConfig process and consumer
 type KafkaConfig struct {
-	KafkaProcessConfig
 	KafkaConsumerConfig
+	KafkaConsumerConnectConfig
 }
 
-type KafkaProcessConfig struct {
+// KafkaConsumerConfig process
+type KafkaConsumerConfig struct {
 	Topics    []string `toml:"topics"`
 	Consumers int      `toml:"consumers"`
 	Batch     int      `toml:"batch_size"`
 }
 
-type KafkaConsumerConfig struct {
+// KafkaConsumerConnectConfig consumer
+type KafkaConsumerConnectConfig struct {
 	Brokers            []string `toml:"brokers"`
 	Group              string   `toml:"group"`
 	AutoCommit         bool     `toml:"auto_commit"`
@@ -40,6 +48,7 @@ type KafkaConsumerConfig struct {
 	SessionTimeout     int      `toml:"session_timeout_ms"`
 }
 
+// ClickhouseConfig client
 type ClickhouseConfig struct {
 	Node          string `toml:"node"`
 	DbTable       string `toml:"db_table"`
@@ -53,17 +62,18 @@ func main() {
 	cliDebug := flag.Bool("debug", false, "Debug mode")
 	flag.Parse()
 
-	var logger = NewLog("kaha", 0)
+	var logger = newLog("kaha", 0)
 
-	cfg, err := loadConfig(*cliConfig)
-	if err != nil {
+	var cfg Config
+
+	if err := loadConfig(*cliConfig, &cfg); err != nil {
 		logger.Fatal(err)
 	}
 
-	var clickLogger *log.Logger
+	var clickhLog *log.Logger
 
 	if *cliDebug {
-		clickLogger = NewLog("kaha clickhouse", 0)
+		clickhLog = newLog("kaha clickhouse", 0)
 	}
 
 	clickh := NewClickhouse(&http.Client{
@@ -76,33 +86,30 @@ func main() {
 		cfg.Clickhouse.Node,
 		cfg.Clickhouse.RetryAttempts,
 		time.Second*time.Duration(cfg.Clickhouse.BackoffTime),
-		clickLogger,
+		clickhLog,
 	)
 
 	consumers := make([]*Consumer, cfg.Kafka.Consumers)
 
 	for i := 0; i < cfg.Kafka.Consumers; i++ {
-		if err != nil {
-			logger.Fatal(err)
-		}
-		consumeLog := NewLog(fmt.Sprintf("kaha consumer-%v", i+1), 0)
+		consumerLog := newLog(fmt.Sprintf("kaha consumer-%v", i+1), 0)
 
 		process := ProcessBatch(clickh,
 			&cfg.ProcessConfig,
 			cfg.Clickhouse.DbTable,
-			NewLogReducedFields(logger))
+			NewLogReducedFields(consumerLog))
 
 		if *cliDebug {
-			process = LogProcessBatch(consumeLog, process)
+			process = LogProcessBatch(consumerLog, process)
 		}
 
 		consumer, err := NewConsumer(
-			NewConsumerConfig(&cfg.Kafka.KafkaConsumerConfig),
+			NewConsumerConfig(&cfg.Kafka.KafkaConsumerConnectConfig),
 			cfg.Kafka.Topics,
 			cfg.Kafka.AutoCommit,
 			cfg.Kafka.Batch,
 			process,
-			consumeLog,
+			consumerLog,
 		)
 		if err != nil {
 			logger.Fatal(err)
@@ -111,4 +118,28 @@ func main() {
 	}
 
 	RunConsumer(logger, *cliDebug, consumers...)
+}
+
+type logWriter struct {
+}
+
+func (writer logWriter) Write(bytes []byte) (int, error) {
+	return fmt.Print(time.Now().UTC().Format("Jan 02 15:04:05") + " " + string(bytes))
+}
+
+func newLog(name string, flag int) *log.Logger {
+	return log.New(new(logWriter), name+" ", flag)
+}
+
+func loadConfig(f string, cfg *Config) (err error) {
+	b, err := ioutil.ReadFile(f)
+	if err != nil {
+		return fmt.Errorf("could not read file %s: %v", f, err)
+	}
+
+	if _, err = toml.Decode(string(b), cfg); err != nil {
+		return fmt.Errorf("could not parse file %s: %v", f, err)
+	}
+
+	return nil
 }

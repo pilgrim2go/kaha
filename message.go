@@ -7,14 +7,17 @@ import (
 	"strings"
 )
 
+// Message for kafka's JSON unmarshall with useful mutators
 type Message map[string]interface{}
 
+// RemoveFields remove root fields by name
 func (m Message) RemoveFields(fields []string) {
 	for _, field := range fields {
 		delete(m, field)
 	}
 }
 
+// RemoveEmptyFields remove root empty fields
 func (m Message) RemoveEmptyFields() {
 	for name, value := range m {
 		if value == nil {
@@ -23,7 +26,8 @@ func (m Message) RemoveEmptyFields() {
 	}
 }
 
-func (m Message) ReduceFields(onlyFields []string) map[string]interface{} {
+// ReduceToFields leave only given fields and return removed ones
+func (m Message) ReduceToFields(onlyFields []string) map[string]interface{} {
 	reduced := make(map[string]interface{})
 	for name, value := range m {
 		if !strInSlice(name, onlyFields) {
@@ -34,7 +38,8 @@ func (m Message) ReduceFields(onlyFields []string) map[string]interface{} {
 	return reduced
 }
 
-func (m Message) FlatFields(pathName map[string]string) {
+// RenameFields rename field's name in given path
+func (m Message) RenameFields(pathName map[string]string) {
 	for path, name := range pathName {
 		if value, ok := getValueRemovePath(strings.Split(path, "."), m); ok {
 			m[name] = value
@@ -42,6 +47,7 @@ func (m Message) FlatFields(pathName map[string]string) {
 	}
 }
 
+// SubMatchValues change field's value based on regexp submatch
 func (m Message) SubMatchValues(nameRegexp map[string]*regexp.Regexp) error {
 	for name, rgxp := range nameRegexp {
 		if rgxp == nil {

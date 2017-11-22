@@ -14,10 +14,12 @@ import (
 	"time"
 )
 
+// Clickhouse client
 type Clickhouse struct {
 	Client Client
 }
 
+// NewClickhouse create new client
 func NewClickhouse(client *http.Client, host string, attempts int, backoff time.Duration, l *log.Logger) *Clickhouse {
 	decorators := []Decorator{
 		ApiAddr(host),
@@ -31,6 +33,7 @@ func NewClickhouse(client *http.Client, host string, attempts int, backoff time.
 	}
 }
 
+// GetColumns get column names from database table
 func (c *Clickhouse) GetColumns(dbTableName string) (columns []string, err error) {
 	type describeTable struct {
 		Data []map[string]string `json:"data"`
@@ -53,6 +56,7 @@ func (c *Clickhouse) GetColumns(dbTableName string) (columns []string, err error
 	return columns, nil
 }
 
+// InsertIntoJSONEachRow Insert data to database table in JSONEachRow format
 func (c *Clickhouse) InsertIntoJSONEachRow(dbTableName string, rows [][]byte) error {
 	b := make([]byte, 0)
 
@@ -176,7 +180,7 @@ func ApiAddr(apiAddr string) Decorator {
 	}
 }
 
-// Decorate decorates a Client c with all the given Decorators, in order.
+// Decorate decorates a Client c with all the given Decorators, in order
 func Decorate(c Client, ds ...Decorator) Client {
 	decorated := c
 	for _, decorate := range ds {

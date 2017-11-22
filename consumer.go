@@ -15,8 +15,10 @@ import (
 	"github.com/confluentinc/confluent-kafka-go/kafka"
 )
 
+// ProcessMessagesFunc type used for message processing
 type ProcessMessagesFunc func([]*kafka.Message) error
 
+// Consumer kafka client
 type Consumer struct {
 	*kafka.Consumer
 	process ProcessMessagesFunc
@@ -27,6 +29,7 @@ type Consumer struct {
 	logger *log.Logger
 }
 
+// NewConsumer create new kafka client
 func NewConsumer(cfg *kafka.ConfigMap, topics []string, autoCommit bool, batchSize int, process ProcessMessagesFunc, logger *log.Logger) (*Consumer, error) {
 	c, err := kafka.NewConsumer(cfg)
 
@@ -49,7 +52,8 @@ func NewConsumer(cfg *kafka.ConfigMap, topics []string, autoCommit bool, batchSi
 	}, nil
 }
 
-func NewConsumerConfig(cfg *KafkaConsumerConfig) *kafka.ConfigMap {
+// NewConsumerConfig create new consumer config
+func NewConsumerConfig(cfg *KafkaConsumerConnectConfig) *kafka.ConfigMap {
 	return &kafka.ConfigMap{
 		"bootstrap.servers":               strings.Join(cfg.Brokers, ","),
 		"group.id":                        cfg.Group,
@@ -61,6 +65,7 @@ func NewConsumerConfig(cfg *KafkaConsumerConfig) *kafka.ConfigMap {
 		"default.topic.config":            kafka.ConfigMap{"auto.offset.reset": cfg.AutoOffsetReset}}
 }
 
+// Consume read and process messages from kafka
 func (c *Consumer) Consume(wg *sync.WaitGroup, quit chan bool, logEOF bool) {
 	shutDown := func(err error) {
 		if err != nil {
@@ -133,6 +138,7 @@ func (c *Consumer) Consume(wg *sync.WaitGroup, quit chan bool, logEOF bool) {
 	}
 }
 
+// RunConsumer start and manage one or more consumers
 func RunConsumer(logger *log.Logger, logEOF bool, consumer ...*Consumer) {
 	quitPool := make(chan chan bool, len(consumer))
 	var wg sync.WaitGroup
@@ -163,12 +169,14 @@ func RunConsumer(logger *log.Logger, logEOF bool, consumer ...*Consumer) {
 	logger.Println("all consumers closed")
 }
 
+// ProcessBatch default process function that sends bulk of messages from kafka to clichouse database table
 func ProcessBatch(clickh *Clickhouse, pc *ProcessConfig, dbTableName string, lrf *LogReducedFields) ProcessMessagesFunc {
+	// get clickhouse table structure
 	tableColumns, err := clickh.GetColumns(dbTableName)
 	if err != nil {
 		panic(err)
 	}
-
+	// compile regexps for submatch mutator
 	rgxps := make(map[string]*regexp.Regexp)
 	if len(pc.SubMatchValues) > 0 {
 		for field, rgxpStr := range pc.SubMatchValues {
@@ -184,12 +192,12 @@ func ProcessBatch(clickh *Clickhouse, pc *ProcessConfig, dbTableName string, lrf
 				return fmt.Errorf("could not parse message: %v", err)
 			}
 
-			msg.FlatFields(pc.RenameFields)
+			msg.RenameFields(pc.RenameFields)
 			msg.RemoveFields(pc.RemoveFields)
 			if err := msg.SubMatchValues(rgxps); err != nil {
 				return fmt.Errorf("could not submatch values: %v", err)
 			}
-			reducedFields := msg.ReduceFields(tableColumns)
+			reducedFields := msg.ReduceToFields(tableColumns)
 			lrf.LogReduced(reducedFields)
 			msg.RemoveEmptyFields()
 
@@ -213,6 +221,7 @@ func getOffsets(messages []*kafka.Message) []kafka.TopicPartition {
 	return offsets
 }
 
+// LogProcessBatch log time spend on messages processing
 func LogProcessBatch(l *log.Logger, process ProcessMessagesFunc) ProcessMessagesFunc {
 	return func(messages []*kafka.Message) error {
 		start := time.Now()
@@ -223,5 +232,30 @@ func LogProcessBatch(l *log.Logger, process ProcessMessagesFunc) ProcessMessages
 		}
 		l.Printf("finished processing of %d messages time: %v", len(messages), time.Since(start))
 		return nil
+	}
+}
+
+// LogReducedFields Custom logger for message processing
+type LogReducedFields struct {
+	logged map[string]bool
+	*log.Logger
+}
+
+// LogReduced log field only once
+func (l *LogReducedFields) LogReduced(fields map[string]interface{}) {
+	for key, value := range fields {
+		if _, ok := l.logged[key]; ok {
+			continue
+		}
+		l.Printf("reduced field %s: %v", key, value)
+		l.logged[key] = true
+	}
+}
+
+// NewLogReducedFields creator
+func NewLogReducedFields(l *log.Logger) *LogReducedFields {
+	return &LogReducedFields{
+		logged: make(map[string]bool),
+		Logger: l,
 	}
 }
