@@ -2,7 +2,7 @@ package models
 
 // Config all
 type Config struct {
-	Consumer []ConsumerConfig `toml:"consumer"`
+	Consumers []ConsumerConfig `toml:"consumer"`
 }
 
 type ConsumerConfig struct {
@@ -16,15 +16,6 @@ type ConsumerConfig struct {
 type ProducerConfig struct {
 	Name   string                 `toml:"name"`
 	Config map[string]interface{} `toml:"config"`
-}
-
-// ClickhouseConfig client
-type ClickhouseConfig struct {
-	Node          string `toml:"node"`
-	DbTable       string `toml:"db_table"`
-	TimeOut       int    `toml:"timeout_seconds"`
-	RetryAttempts int    `toml:"retry_attempts"`
-	BackoffTime   int    `toml:"backoff_time_seconds"`
 }
 
 // ProcessConfig message mutate options

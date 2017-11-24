@@ -1,4 +1,4 @@
-package producer
+package producers
 
 import (
 	"fmt"
@@ -8,7 +8,7 @@ import (
 	"github.com/mikechris/kaha/models"
 )
 
-type producerInit func(map[string]interface{}) (io.Writer, error)
+type producerInit func(map[string]interface{}, bool) (io.Writer, error)
 
 var regConsumers = map[string]producerInit{}
 
@@ -21,19 +21,19 @@ func init() {
 // RegisterReadProvider add uninitialized read provider
 func registerProducer(name string, init producerInit) {
 	if _, ok := regConsumers[name]; ok {
-		logger.Fatalf("producer %s already registered", name)
+		logger.Fatalf("producer: %s already registered", name)
 	}
 	regConsumers[name] = init
 }
 
-func CreateProducer(name string, config map[string]interface{}) (producer io.Writer, err error) {
+func CreateProducer(name string, config map[string]interface{}, debug bool) (producer io.Writer, err error) {
 	init, ok := regConsumers[name]
 	if !ok {
-		return nil, fmt.Errorf("producer %s not registered", name)
+		return nil, fmt.Errorf("producer: %s not registered", name)
 	}
-	producer, err = init(config)
+	producer, err = init(config, debug)
 	if err != nil {
-		return nil, fmt.Errorf("could not initilize %s producer %v", name, err)
+		return nil, fmt.Errorf("could not initilize producer %s: %v", name, err)
 	}
 
 	return producer, nil

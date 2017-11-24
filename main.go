@@ -2,20 +2,23 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"flag"
 	"fmt"
-	"io"
 	"io/ioutil"
 	"log"
 	"net/http"
+	"os"
+	"os/signal"
+	"sync"
+	"syscall"
 	"time"
 
 	"github.com/BurntSushi/toml"
-	"github.com/confluentinc/confluent-kafka-go/kafka"
 	"github.com/mikechris/kaha/clickhouse"
-	"github.com/mikechris/kaha/consumer"
+	"github.com/mikechris/kaha/consumers"
 	"github.com/mikechris/kaha/models"
-	"github.com/mikechris/kaha/producer"
+	"github.com/mikechris/kaha/producers"
 )
 
 func main() {
@@ -24,60 +27,50 @@ func main() {
 	flag.Parse()
 
 	var logger = models.NewLog("", 0)
-
 	var cfg models.Config
 
 	if err := loadConfig(*cliConfig, &cfg); err != nil {
 		logger.Fatal(err)
 	}
 
-	var clickhLog *log.Logger
+	var wg sync.WaitGroup
 
-	if *cliDebug {
-		clickhLog = models.NewLog("clickhouse", 0)
+	ctx := context.Background()
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
+
+	for _, cfg := range cfg.Consumers {
+		consumer, err := createConsumer(&cfg, &wg, *cliDebug)
+		if err != nil {
+			logger.Println(err)
+			cancel()
+			break
+		}
+		p, err := producers.CreateProducer(cfg.ProducerConfig.Name, cfg.ProducerConfig.Config, *cliDebug)
+		if err != nil {
+			logger.Println(err)
+			cancel()
+			break
+
+		}
+		for _, c := range consumer {
+			wg.Add(1)
+			go c.Consume(p, ctx, &wg)
+		}
+		logger.Printf("started consumers %v\n", consumer)
 	}
 
-	for _, cfg := range cfg.Consumer {
-		var clickhConfig models.ClickhouseConfig
+	osSignals := make(chan os.Signal, 1)
+	signal.Notify(osSignals, syscall.SIGINT, syscall.SIGTERM)
 
-		buf := &bytes.Buffer{}
-		if err := toml.NewEncoder(buf).Encode(cfg.ProducerConfig.Config); err != nil {
-			logger.Fatal(err)
-		}
-
-		if err := toml.Unmarshal(buf.Bytes(), &clickhConfig); err != nil {
-			logger.Fatal(err)
-		}
-
-		clickh := clickhouse.NewClient(&http.Client{
-			Timeout: time.Second * time.Duration(clickhConfig.TimeOut),
-		},
-			clickhConfig.Node,
-			clickhConfig.RetryAttempts,
-			time.Second*time.Duration(clickhConfig.BackoffTime),
-			clickhLog,
-		)
-
-		// get clickhouse table structure
-		columns, err := clickh.GetColumns(clickhConfig.DbTable)
-		if err != nil {
-			logger.Fatal(err)
-		}
-
-		cfg.ProcessConfig.OnlyFields = columns
-
-		consumers, err := consumer.CreateConsumer(cfg.Name, cfg.Consumers, cfg.Config, cfg.ProcessConfig)
-		if err != nil {
-			logger.Fatal(err)
-		}
-
-		p, err := producer.CreateProducer(cfg.ProducerConfig.Name, cfg.ProducerConfig.Config)
-		if err != nil {
-			log.Fatal(err)
-		}
-		consumer.RunConsumer(logger, p, consumers...)
+	select {
+	case sig := <-osSignals:
+		logger.Printf("caught signal: %v terminating\n", sig)
+		cancel()
 	}
 
+	wg.Wait()
+	logger.Println("all consumers closed")
 }
 
 func loadConfig(f string, cfg *models.Config) (err error) {
@@ -93,16 +86,44 @@ func loadConfig(f string, cfg *models.Config) (err error) {
 	return nil
 }
 
-// LogProcessBatch log time spend on messages processing
-func LogProcessBatch(l *log.Logger, process consumer.ProcessMessagesFunc) consumer.ProcessMessagesFunc {
-	return func(producer io.Writer, messages []*kafka.Message) error {
-		start := time.Now()
-		l.Printf("start processing of %d messages", len(messages))
-		err := process(producer, messages)
+func createConsumer(cfg *models.ConsumerConfig, wg *sync.WaitGroup, debug bool) ([]consumers.Consumer, error) {
+	if cfg.ProducerConfig.Name == "clickhouse" {
+		onlyFields, err := getOnlyFieldsFromClickhouse(cfg.ProducerConfig.Config, debug)
 		if err != nil {
-			return err
+			return nil, err
 		}
-		l.Printf("finished processing of %d messages time: %v", len(messages), time.Since(start))
-		return nil
+		cfg.ProcessConfig.OnlyFields = onlyFields
 	}
+
+	return consumers.CreateConsumer(cfg.Name, cfg.Consumers, cfg.Config, cfg.ProcessConfig, debug)
+}
+
+func getOnlyFieldsFromClickhouse(config map[string]interface{}, debug bool) ([]string, error) {
+	var clickhLog *log.Logger
+
+	if debug {
+		clickhLog = models.NewLog("clickhouse", 0)
+	}
+
+	var clickhConfig producers.ClickhouseConfig
+
+	buf := &bytes.Buffer{}
+	if err := toml.NewEncoder(buf).Encode(config); err != nil {
+		return nil, err
+	}
+
+	if err := toml.Unmarshal(buf.Bytes(), &clickhConfig); err != nil {
+		return nil, err
+	}
+
+	clickh := clickhouse.NewClient(&http.Client{
+		Timeout: time.Second * time.Duration(clickhConfig.TimeOut),
+	},
+		clickhConfig.Node,
+		clickhConfig.RetryAttempts,
+		time.Second*time.Duration(clickhConfig.BackoffTime),
+		clickhLog,
+	)
+
+	return clickh.GetColumns(clickhConfig.DbTable)
 }
