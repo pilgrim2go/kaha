@@ -75,7 +75,7 @@ func (s *stdinConsumer) Consume(ctx context.Context, producer io.Writer, wg *syn
 
 				messages = append(messages, &msg)
 
-				if len(messages) != s.batchSize {
+				if len(messages) < s.batchSize {
 					continue
 				}
 			}

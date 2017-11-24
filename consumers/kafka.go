@@ -27,6 +27,7 @@ type kafkaConsumerConfig struct {
 	Topics    []string `toml:"topics"`
 	Consumers int      `toml:"consumers"`
 	Batch     int      `toml:"batch_size"`
+	MaxWait   int      `toml:"max_wait_seconds"`
 }
 
 // kafkaConsumerConnectConfig consumer
@@ -46,6 +47,7 @@ type kafkaConsumer struct {
 
 	autoCommit bool
 	batchSize  int
+	maxWait    time.Duration
 	logEOF     bool
 
 	logger *log.Logger
@@ -93,6 +95,7 @@ func newKafkaConsumer(config map[string]interface{}, processCfg models.ProcessCo
 		process:    process,
 		autoCommit: cfgKafka.AutoCommit,
 		batchSize:  cfgKafka.Batch,
+		maxWait:    time.Duration(cfgKafka.MaxWait) * time.Second,
 		logger:     logger,
 		logEOF:     debug,
 	}, nil
@@ -137,6 +140,7 @@ func (c *kafkaConsumer) Consume(ctx context.Context, producer io.Writer, wg *syn
 		wg.Done()
 	}
 
+	wait := time.Now()
 	queue := make([]*kafka.Message, 0, c.batchSize)
 
 	for {
@@ -155,7 +159,7 @@ func (c *kafkaConsumer) Consume(ctx context.Context, producer io.Writer, wg *syn
 				c.Unassign()
 			case *kafka.Message:
 				queue = append(queue, e)
-				if len(queue) != c.batchSize {
+				if len(queue) < c.batchSize && time.Since(wait) < c.maxWait {
 					continue
 				}
 
@@ -183,6 +187,7 @@ func (c *kafkaConsumer) Consume(ctx context.Context, producer io.Writer, wg *syn
 				}
 
 				queue = queue[:0] // trim back to zero size
+				wait = time.Now()
 			case kafka.PartitionEOF:
 				if c.logEOF {
 					c.logger.Printf("reached %v\n", e)
