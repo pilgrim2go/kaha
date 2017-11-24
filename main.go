@@ -55,7 +55,7 @@ func main() {
 		}
 		for _, c := range consumer {
 			wg.Add(1)
-			go c.Consume(p, ctx, &wg)
+			go c.Consume(ctx, p, &wg)
 		}
 		logger.Printf("started consumers %v\n", consumer)
 	}
@@ -63,11 +63,13 @@ func main() {
 	osSignals := make(chan os.Signal, 1)
 	signal.Notify(osSignals, syscall.SIGINT, syscall.SIGTERM)
 
-	select {
-	case sig := <-osSignals:
-		logger.Printf("caught signal: %v terminating\n", sig)
-		cancel()
-	}
+	go func() {
+		select {
+		case sig := <-osSignals:
+			logger.Printf("caught signal: %v terminating\n", sig)
+			cancel()
+		}
+	}()
 
 	wg.Wait()
 	logger.Println("all consumers closed")
@@ -105,7 +107,7 @@ func getOnlyFieldsFromClickhouse(config map[string]interface{}, debug bool) ([]s
 		clickhLog = models.NewLog("clickhouse", 0)
 	}
 
-	var clickhConfig producers.ClickhouseConfig
+	var clickhConfig models.ClickhouseConfig
 
 	buf := &bytes.Buffer{}
 	if err := toml.NewEncoder(buf).Encode(config); err != nil {

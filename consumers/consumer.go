@@ -10,12 +10,11 @@ import (
 	"sync"
 	"time"
 
-	"github.com/confluentinc/confluent-kafka-go/kafka"
 	"github.com/mikechris/kaha/models"
 )
 
 type Consumer interface {
-	Consume(producer io.Writer, ctx context.Context, wg *sync.WaitGroup)
+	Consume(ctx context.Context, producer io.Writer, wg *sync.WaitGroup)
 }
 
 type consumerInit func(map[string]interface{}, models.ProcessConfig, bool) (Consumer, error)
@@ -28,12 +27,13 @@ func init() {
 	logger = models.NewLog("consumer", 0)
 }
 
-// RegisterReadProvider add uninitialized read provider
+// registerConsumer add uninitialized consumer
 func registerConsumer(name string, init consumerInit) {
 	if _, ok := regConsumers[name]; ok {
 		logger.Fatalf("consumer: %s already registered", name)
 	}
 	regConsumers[name] = init
+	logger.Printf("consumer %s registered", name)
 }
 
 func CreateConsumer(name string, number int, consumerCfg map[string]interface{}, processCfg models.ProcessConfig, debug bool) (consumers []Consumer, err error) {
@@ -51,8 +51,11 @@ func CreateConsumer(name string, number int, consumerCfg map[string]interface{},
 	return consumers, nil
 }
 
-// ProcessBatch default process function that sends bulk of messages from kafka to clichouse database table
-func ProcessBatch(pc models.ProcessConfig, lrf *models.LogReducedFields) ProcessMessagesFunc {
+// processMessagesFunc type used for message processing
+type processMessagesFunc func(io.Writer, []*models.Message) error
+
+// processBatch default process function that sends bulk of messages from kafka to clichouse database table
+func processBatch(pc models.ProcessConfig, lrf *models.LogReducedFields) processMessagesFunc {
 	// compile regexps for submatch mutator
 	rgxps := make(map[string]*regexp.Regexp)
 	if len(pc.SubMatchValues) > 0 {
@@ -60,15 +63,10 @@ func ProcessBatch(pc models.ProcessConfig, lrf *models.LogReducedFields) Process
 			rgxps[field] = regexp.MustCompile(rgxpStr)
 		}
 	}
-	return func(producer io.Writer, batch []*kafka.Message) error {
+	return func(producer io.Writer, batch []*models.Message) error {
 		var rows []byte
 
-		for _, m := range batch {
-			var msg models.Message
-			if err := json.Unmarshal(m.Value, &msg); err != nil {
-				return fmt.Errorf("could not parse message: %v", err)
-			}
-
+		for _, msg := range batch {
 			msg.RenameFields(pc.RenameFields)
 			msg.RemoveFields(pc.RemoveFields)
 			if err := msg.SubMatchValues(rgxps); err != nil {
@@ -91,9 +89,9 @@ func ProcessBatch(pc models.ProcessConfig, lrf *models.LogReducedFields) Process
 	}
 }
 
-// LogProcessBatch log time spend on messages processing
-func LogProcessBatch(l *log.Logger, process ProcessMessagesFunc) ProcessMessagesFunc {
-	return func(producer io.Writer, messages []*kafka.Message) error {
+// logProcessBatch log time spend on messages processing
+func logProcessBatch(l *log.Logger, process processMessagesFunc) processMessagesFunc {
+	return func(producer io.Writer, messages []*models.Message) error {
 		start := time.Now()
 		l.Printf("start processing of %d messages", len(messages))
 		err := process(producer, messages)

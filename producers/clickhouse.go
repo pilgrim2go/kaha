@@ -12,27 +12,17 @@ import (
 	"github.com/mikechris/kaha/models"
 )
 
-// ClickhouseConfig client
-type ClickhouseConfig struct {
-	Node          string `toml:"node"`
-	DbTable       string `toml:"db_table"`
-	TimeOut       int    `toml:"timeout_seconds"`
-	RetryAttempts int    `toml:"retry_attempts"`
-	BackoffTime   int    `toml:"backoff_time_seconds"`
-	ConnLimit     int    `toml:"conn_limit"`
-}
-
-type Clickhouse struct {
+type clickhouseProducer struct {
 	*clickhouse.Client
 	DbTable string
 }
 
 func init() {
-	registerProducer("clickhouse", newClickhouse)
+	registerProducer("clickhouse", newClickhouseProducer)
 }
 
-func newClickhouse(config map[string]interface{}, debug bool) (producer io.Writer, err error) {
-	var cfgClickh ClickhouseConfig
+func newClickhouseProducer(config map[string]interface{}, debug bool) (producer io.Writer, err error) {
+	var cfgClickh models.ClickhouseConfig
 
 	buf := &bytes.Buffer{}
 
@@ -62,12 +52,12 @@ func newClickhouse(config map[string]interface{}, debug bool) (producer io.Write
 		time.Second*time.Duration(cfgClickh.BackoffTime),
 		logger,
 	)
-	return &Clickhouse{
+	return &clickhouseProducer{
 		Client:  clickh,
 		DbTable: cfgClickh.DbTable,
 	}, err
 }
 
-func (c *Clickhouse) Write(p []byte) (int, error) {
+func (c *clickhouseProducer) Write(p []byte) (int, error) {
 	return len(p), c.InsertIntoJSONEachRow(c.DbTable, p)
 }

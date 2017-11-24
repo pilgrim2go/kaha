@@ -25,3 +25,13 @@ type ProcessConfig struct {
 	RemoveFields   []string          `toml:"remove_fields"`
 	OnlyFields     []string          `toml:"only_fields"`
 }
+
+// clickhouseConfig client
+type ClickhouseConfig struct {
+	Node          string `toml:"node"`
+	DbTable       string `toml:"db_table"`
+	TimeOut       int    `toml:"timeout_seconds"`
+	RetryAttempts int    `toml:"retry_attempts"`
+	BackoffTime   int    `toml:"backoff_time_seconds"`
+	ConnLimit     int    `toml:"conn_limit"`
+}

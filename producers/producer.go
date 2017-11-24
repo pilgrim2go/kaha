@@ -18,7 +18,7 @@ func init() {
 	logger = models.NewLog("producer", 0)
 }
 
-// RegisterReadProvider add uninitialized read provider
+// registerProducer add uninitialized producer
 func registerProducer(name string, init producerInit) {
 	if _, ok := regConsumers[name]; ok {
 		logger.Fatalf("producer: %s already registered", name)

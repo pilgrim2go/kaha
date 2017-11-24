@@ -3,6 +3,7 @@ package consumers
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"fmt"
 	"io"
 	"log"
@@ -15,21 +16,21 @@ import (
 	"github.com/mikechris/kaha/models"
 )
 
-// KafkaConfig process and consumer
-type KafkaConfig struct {
-	KafkaConsumerConfig
-	KafkaConsumerConnectConfig
+// kafkaConfig process and consumer
+type kafkaConfig struct {
+	kafkaConsumerConfig
+	kafkaConsumerConnectConfig
 }
 
-// KafkaConsumerConfig process
-type KafkaConsumerConfig struct {
+// kafkaConsumerConfig process
+type kafkaConsumerConfig struct {
 	Topics    []string `toml:"topics"`
 	Consumers int      `toml:"consumers"`
 	Batch     int      `toml:"batch_size"`
 }
 
-// KafkaConsumerConnectConfig consumer
-type KafkaConsumerConnectConfig struct {
+// kafkaConsumerConnectConfig consumer
+type kafkaConsumerConnectConfig struct {
 	Brokers            []string `toml:"brokers"`
 	Group              string   `toml:"group"`
 	AutoCommit         bool     `toml:"auto_commit"`
@@ -38,13 +39,10 @@ type KafkaConsumerConnectConfig struct {
 	SessionTimeout     int      `toml:"session_timeout_ms"`
 }
 
-// ProcessMessagesFunc type used for message processing
-type ProcessMessagesFunc func(io.Writer, []*kafka.Message) error
-
-// Kafka kafka client
-type Kafka struct {
+// kafkaConsumer kafkaConsumer client
+type kafkaConsumer struct {
 	*kafka.Consumer
-	process ProcessMessagesFunc
+	process processMessagesFunc
 
 	autoCommit bool
 	batchSize  int
@@ -54,11 +52,11 @@ type Kafka struct {
 }
 
 func init() {
-	registerConsumer("kafka", newKafka)
+	registerConsumer("kafka", newKafkaConsumer)
 }
 
-func newKafka(config map[string]interface{}, processCfg models.ProcessConfig, debug bool) (Consumer, error) {
-	var cfgKafka KafkaConfig
+func newKafkaConsumer(config map[string]interface{}, processCfg models.ProcessConfig, debug bool) (Consumer, error) {
+	var cfgKafka kafkaConfig
 
 	buf := &bytes.Buffer{}
 	if err := toml.NewEncoder(buf).Encode(config); err != nil {
@@ -69,7 +67,7 @@ func newKafka(config map[string]interface{}, processCfg models.ProcessConfig, de
 		return nil, err
 	}
 
-	consumerCfg := NewConsumerConfig(&cfgKafka.KafkaConsumerConnectConfig)
+	consumerCfg := newConsumerConfig(&cfgKafka.kafkaConsumerConnectConfig)
 
 	c, err := kafka.NewConsumer(consumerCfg)
 
@@ -84,13 +82,13 @@ func newKafka(config map[string]interface{}, processCfg models.ProcessConfig, de
 	}
 
 	logger := models.NewLog(c.String(), 0)
-	process := ProcessBatch(processCfg, models.NewLogReducedFields(logger))
+	process := processBatch(processCfg, models.NewLogReducedFields(logger))
 
 	if debug {
-		process = LogProcessBatch(logger, process)
+		process = logProcessBatch(logger, process)
 	}
 
-	return &Kafka{
+	return &kafkaConsumer{
 		Consumer:   c,
 		process:    process,
 		autoCommit: cfgKafka.AutoCommit,
@@ -100,8 +98,8 @@ func newKafka(config map[string]interface{}, processCfg models.ProcessConfig, de
 	}, nil
 }
 
-// NewConsumerConfig create new consumer config
-func NewConsumerConfig(cfg *KafkaConsumerConnectConfig) *kafka.ConfigMap {
+// newConsumerConfig create new consumer config
+func newConsumerConfig(cfg *kafkaConsumerConnectConfig) *kafka.ConfigMap {
 	return &kafka.ConfigMap{
 		"bootstrap.servers":               strings.Join(cfg.Brokers, ","),
 		"group.id":                        cfg.Group,
@@ -114,7 +112,7 @@ func NewConsumerConfig(cfg *KafkaConsumerConnectConfig) *kafka.ConfigMap {
 }
 
 // Consume read and process messages from kafka
-func (c *Kafka) Consume(producer io.Writer, ctx context.Context, wg *sync.WaitGroup) {
+func (c *kafkaConsumer) Consume(ctx context.Context, producer io.Writer, wg *sync.WaitGroup) {
 	shutDown := func(err error) {
 		if err != nil {
 			c.logger.Println(err)
@@ -161,7 +159,18 @@ func (c *Kafka) Consume(producer io.Writer, ctx context.Context, wg *sync.WaitGr
 					continue
 				}
 
-				if err := c.process(producer, messages); err != nil {
+				msgs := make([]*models.Message, len(messages))
+
+				for i := 0; i < len(messages); i++ {
+					var msg models.Message
+					if err := json.Unmarshal(messages[i].Value, &msg); err != nil {
+						shutDown(fmt.Errorf("could not parse message: %v", err))
+						return
+					}
+					msgs[i] = &msg
+				}
+
+				if err := c.process(producer, msgs); err != nil {
 					shutDown(fmt.Errorf("could not process batch: %v", err))
 					return
 				}
