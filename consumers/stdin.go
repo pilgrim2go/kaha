@@ -15,8 +15,8 @@ import (
 
 type stdinConsumer struct {
 	batchSize int
-	loggger   *log.Logger
 	process   processMessagesFunc
+	logger    *log.Logger
 }
 
 const consumerName = "stdin"
@@ -47,24 +47,28 @@ func newStdinConsumer(config map[string]interface{}, processCfg models.ProcessCo
 	if debug {
 		process = logProcessBatch(logger, process)
 	}
-	return &stdinConsumer{batchSize, models.NewLog(consumerName, 0), process}, nil
+	return &stdinConsumer{
+		batchSize: batchSize,
+		process:   process,
+		logger:    models.NewLog(consumerName, 0),
+	}, nil
 
 }
 
 func (s *stdinConsumer) Consume(ctx context.Context, producer io.Writer, wg *sync.WaitGroup) {
 	messages := make([]*models.Message, 0, s.batchSize)
-	mes := read(os.Stdin) // reading from Stdin
+	stdin := read(os.Stdin) // reading from Stdin
 
 	for {
 		select {
 		case <-ctx.Done():
 			wg.Done()
 			return
-		case b, ok := <-mes:
+		case b, ok := <-stdin:
 			if ok {
 				var msg models.Message
 				if err := json.Unmarshal(b, &msg); err != nil {
-					s.loggger.Println(err)
+					s.logger.Println(err)
 					wg.Done()
 					return
 				}
@@ -78,7 +82,7 @@ func (s *stdinConsumer) Consume(ctx context.Context, producer io.Writer, wg *syn
 
 			if len(messages) > 0 {
 				if err := s.process(producer, messages); err != nil {
-					s.loggger.Println(err)
+					s.logger.Println(err)
 					wg.Done()
 					return
 				}

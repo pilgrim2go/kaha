@@ -137,7 +137,7 @@ func (c *kafkaConsumer) Consume(ctx context.Context, producer io.Writer, wg *syn
 		wg.Done()
 	}
 
-	messages := make([]*kafka.Message, 0, c.batchSize)
+	queue := make([]*kafka.Message, 0, c.batchSize)
 
 	for {
 		select {
@@ -154,35 +154,35 @@ func (c *kafkaConsumer) Consume(ctx context.Context, producer io.Writer, wg *syn
 				c.logger.Println(e)
 				c.Unassign()
 			case *kafka.Message:
-				messages = append(messages, e)
-				if len(messages) != c.batchSize {
+				queue = append(queue, e)
+				if len(queue) != c.batchSize {
 					continue
 				}
 
-				msgs := make([]*models.Message, len(messages))
+				messages := make([]*models.Message, len(queue))
 
-				for i := 0; i < len(messages); i++ {
+				for i := 0; i < len(queue); i++ {
 					var msg models.Message
-					if err := json.Unmarshal(messages[i].Value, &msg); err != nil {
+					if err := json.Unmarshal(queue[i].Value, &msg); err != nil {
 						shutDown(fmt.Errorf("could not parse message: %v", err))
 						return
 					}
-					msgs[i] = &msg
+					messages[i] = &msg
 				}
 
-				if err := c.process(producer, msgs); err != nil {
+				if err := c.process(producer, messages); err != nil {
 					shutDown(fmt.Errorf("could not process batch: %v", err))
 					return
 				}
 
 				if !c.autoCommit {
-					if _, err := c.CommitOffsets(getOffsets(messages)); err != nil {
+					if _, err := c.CommitOffsets(getOffsets(queue)); err != nil {
 						shutDown(fmt.Errorf("could not commit offsets: %v", err))
 						return
 					}
 				}
 
-				messages = messages[:0] // trim back to zero size
+				queue = queue[:0] // trim back to zero size
 			case kafka.PartitionEOF:
 				if c.logEOF {
 					c.logger.Printf("reached %v\n", e)
