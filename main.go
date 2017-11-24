@@ -40,7 +40,7 @@ func main() {
 	defer cancel()
 
 	for _, cfg := range cfg.Consumers {
-		consumer, err := createConsumer(&cfg, &wg, *cliDebug)
+		consumer, err := createConsumer(&cfg, *cliDebug)
 		if err != nil {
 			logger.Println(err)
 			cancel()
@@ -88,7 +88,7 @@ func loadConfig(f string, cfg *models.Config) (err error) {
 	return nil
 }
 
-func createConsumer(cfg *models.ConsumerConfig, wg *sync.WaitGroup, debug bool) ([]consumers.Consumer, error) {
+func createConsumer(cfg *models.ConsumerConfig, debug bool) ([]consumers.Consumer, error) {
 	if cfg.ProducerConfig.Name == "clickhouse" {
 		onlyFields, err := getOnlyFieldsFromClickhouse(cfg.ProducerConfig.Config, debug)
 		if err != nil {
