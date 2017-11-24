@@ -16,11 +16,11 @@ import (
 
 // Client client
 type Client struct {
-	Client HttpClient
+	Client HTTPClient
 }
 
 // NewClient create new client
-func NewClient(client HttpClient, host string, attempts int, backoff time.Duration, l *log.Logger) *Client {
+func NewClient(client HTTPClient, host string, attempts int, backoff time.Duration, l *log.Logger) *Client {
 	decorators := []Decorator{
 		APIAddr(host),
 		FaultTolerance(attempts, backoff),
@@ -100,9 +100,9 @@ func (c *Client) Do(httpMethod string, payload io.Reader, contentType string, v 
 	return json.Unmarshal(body, v)
 }
 
-// A HttpClient sends http.Requests and returns http.Responses or errors in
+// A HTTPClient sends http.Requests and returns http.Responses or errors in
 // case of failure.
-type HttpClient interface {
+type HTTPClient interface {
 	Do(*http.Request) (*http.Response, error)
 }
 
@@ -115,11 +115,11 @@ func (f ClientFunc) Do(r *http.Request) (*http.Response, error) {
 }
 
 // A Decorator wraps a Client with extra behaviour.
-type Decorator func(HttpClient) HttpClient
+type Decorator func(HTTPClient) HTTPClient
 
 // Logging returns a Decorator that logs a Client's requests.
 func Logging(l *log.Logger) Decorator {
-	return func(c HttpClient) HttpClient {
+	return func(c HTTPClient) HTTPClient {
 		return ClientFunc(func(r *http.Request) (resp *http.Response, err error) {
 			id := rand.Int63()
 			l.Printf("[%d] %s %s %d", id, r.Method, r.URL, r.ContentLength)
@@ -137,7 +137,7 @@ func Logging(l *log.Logger) Decorator {
 // FaultTolerance returns a Decorator that extends a Client with fault tolerance
 // configured with the given attempts and backoff duration.
 func FaultTolerance(attempts int, backoff time.Duration) Decorator {
-	return func(c HttpClient) HttpClient {
+	return func(c HTTPClient) HTTPClient {
 		return ClientFunc(func(r *http.Request) (res *http.Response, err error) {
 			for i := 0; i <= attempts; i++ {
 				if res, err = c.Do(r); err == nil {
@@ -158,7 +158,7 @@ func FaultTolerance(attempts int, backoff time.Duration) Decorator {
 
 // APIAddr Add API address to request
 func APIAddr(apiAddr string) Decorator {
-	return func(c HttpClient) HttpClient {
+	return func(c HTTPClient) HTTPClient {
 		return ClientFunc(func(r *http.Request) (*http.Response, error) {
 			if strings.HasPrefix(r.URL.String(), apiAddr) {
 				return c.Do(r)
@@ -174,7 +174,7 @@ func APIAddr(apiAddr string) Decorator {
 }
 
 // Decorate decorates a Client c with all the given Decorators, in order
-func Decorate(c HttpClient, ds ...Decorator) HttpClient {
+func Decorate(c HTTPClient, ds ...Decorator) HTTPClient {
 	decorated := c
 	for _, decorate := range ds {
 		decorated = decorate(decorated)
