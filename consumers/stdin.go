@@ -47,7 +47,7 @@ func newStdinConsumer(config map[string]interface{}, processCfg models.ProcessCo
 	if debug {
 		process = logProcessBatch(logger, process)
 	}
-	return &stdinConsumer{batchSize, models.NewLog("stdin", 0), process}, nil
+	return &stdinConsumer{batchSize, models.NewLog(consumerName, 0), process}, nil
 
 }
 
