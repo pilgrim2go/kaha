@@ -24,52 +24,59 @@ import (
 func main() {
 	cliConfig := flag.String("config", "kaha.toml", "Kaha feeder config file path")
 	cliDebug := flag.Bool("debug", false, "Debug mode")
+
 	flag.Parse()
 
-	var logger = models.NewLog("", 0)
+	var logger = models.NewLog(os.Stderr, "", 0)
 	var cfg models.Config
 
 	if err := loadConfig(*cliConfig, &cfg); err != nil {
 		logger.Fatal(err)
 	}
 
-	var wg sync.WaitGroup
-
 	ctx := context.Background()
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
-
-	for _, cfg := range cfg.Consumers {
-		consumer, err := createConsumer(&cfg, *cliDebug)
-		if err != nil {
-			logger.Println(err)
-			cancel()
-			break
-		}
-		p, err := producers.CreateProducer(cfg.ProducerConfig.Name, cfg.ProducerConfig.Config, *cliDebug)
-		if err != nil {
-			logger.Println(err)
-			cancel()
-			break
-
-		}
-		for _, c := range consumer {
-			wg.Add(1)
-			go c.Consume(ctx, p, &wg)
-		}
-		logger.Printf("started consumers %v\n", consumer)
-	}
 
 	osSignals := make(chan os.Signal, 1)
 	signal.Notify(osSignals, syscall.SIGINT, syscall.SIGTERM)
 
 	go func() {
-		select {
-		case sig := <-osSignals:
-			logger.Printf("caught signal: %v terminating\n", sig)
-			cancel()
-		}
+		sig := <-osSignals
+		logger.Printf("terminating after received signal: %v\n", sig)
+		cancel()
 	}()
+
+	var wg sync.WaitGroup
+
+loop:
+	for _, cfg := range cfg.Consumers {
+		consumers := make([]consumers.Consumer, cfg.Consumers)
+		for i := 0; i < cfg.Consumers; i++ {
+			consumer, err := createConsumer(&cfg, *cliDebug, models.NewLog(os.Stderr, cfg.Name, 0))
+
+			if err != nil {
+				logger.Println(err)
+				cancel()
+				break loop
+			}
+			consumers[i] = consumer
+		}
+
+		p, err := producers.CreateProducer(cfg.ProducerConfig.Name, cfg.ProducerConfig.Config, *cliDebug, models.NewLog(os.Stderr, cfg.ProducerConfig.Name, 0))
+		if err != nil {
+			logger.Println(err)
+			cancel()
+			break loop
+
+		}
+
+		for _, c := range consumers {
+			wg.Add(1)
+			go c.Consume(ctx, p, &wg)
+		}
+		logger.Printf("started consumers %v\n", consumers)
+	}
 
 	wg.Wait()
 	logger.Println("all consumers closed")
@@ -88,7 +95,7 @@ func loadConfig(f string, cfg *models.Config) (err error) {
 	return nil
 }
 
-func createConsumer(cfg *models.ConsumerConfig, debug bool) ([]consumers.Consumer, error) {
+func createConsumer(cfg *models.ConsumerConfig, debug bool, logger *log.Logger) (consumers.Consumer, error) {
 	if cfg.ProducerConfig.Name == "clickhouse" {
 		onlyFields, err := getOnlyFieldsFromClickhouse(cfg.ProducerConfig.Config, debug)
 		if err != nil {
@@ -97,14 +104,14 @@ func createConsumer(cfg *models.ConsumerConfig, debug bool) ([]consumers.Consume
 		cfg.ProcessConfig.OnlyFields = onlyFields
 	}
 
-	return consumers.CreateConsumer(cfg.Name, cfg.Consumers, cfg.Config, cfg.ProcessConfig, debug)
+	return consumers.CreateConsumer(cfg.Name, cfg.Config, cfg.ProcessConfig, debug, logger)
 }
 
 func getOnlyFieldsFromClickhouse(config map[string]interface{}, debug bool) ([]string, error) {
 	var clickhLog *log.Logger
 
 	if debug {
-		clickhLog = models.NewLog("clickhouse", 0)
+		clickhLog = models.NewLog(os.Stderr, "clickhouse", 0)
 	}
 
 	var clickhConfig models.ClickhouseConfig

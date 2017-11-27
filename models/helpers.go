@@ -2,6 +2,7 @@ package models
 
 import (
 	"fmt"
+	"io"
 	"log"
 	"os"
 	"strings"
@@ -9,19 +10,20 @@ import (
 )
 
 type logWriter struct {
+	out io.Writer
 }
 
-func (writer logWriter) Write(bytes []byte) (int, error) {
-	return fmt.Print(time.Now().UTC().Format("Jan 02 15:04:05") + " " + string(bytes))
+func (w logWriter) Write(bytes []byte) (int, error) {
+	return fmt.Fprint(w.out, time.Now().UTC().Format("Jan 02 15:04:05")+" "+string(bytes))
 }
 
-func NewLog(name string, flag int) *log.Logger {
+func NewLog(out io.Writer, name string, flag int) *log.Logger {
 	if name != "" {
 		name = " " + name
 	}
 	prefix := strings.Split(os.Args[0], "/")
 	name = prefix[len(prefix)-1] + name
-	return log.New(new(logWriter), name+" ", flag)
+	return log.New(&logWriter{out}, name+" ", flag)
 }
 
 // LogReducedFields Custom logger for message processing

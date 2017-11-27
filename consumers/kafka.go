@@ -57,7 +57,7 @@ func init() {
 	registerConsumer("kafka", newKafkaConsumer)
 }
 
-func newKafkaConsumer(config map[string]interface{}, processCfg models.ProcessConfig, debug bool) (Consumer, error) {
+func newKafkaConsumer(config map[string]interface{}, processCfg models.ProcessConfig, debug bool, logger *log.Logger) (Consumer, error) {
 	var cfgKafka kafkaConfig
 
 	buf := &bytes.Buffer{}
@@ -83,7 +83,8 @@ func newKafkaConsumer(config map[string]interface{}, processCfg models.ProcessCo
 		return nil, fmt.Errorf("could not to subscribe to topics: %s %s", cfgKafka.Topics, err)
 	}
 
-	logger := models.NewLog(c.String(), 0)
+	logger.SetPrefix(logger.Prefix() + c.String() + " ")
+
 	process := processBatch(processCfg, models.NewLogReducedFields(logger))
 
 	if debug {
@@ -131,7 +132,7 @@ func (c *kafkaConsumer) Consume(ctx context.Context, producer io.Writer, wg *syn
 		select {
 		case err := <-errs:
 			if err != nil {
-				c.logger.Printf(" not close: %v", err)
+				c.logger.Printf("could not close: %v", err)
 			}
 			c.logger.Println("closed")
 		case <-time.After(time.Second * 5):
@@ -143,12 +144,13 @@ func (c *kafkaConsumer) Consume(ctx context.Context, producer io.Writer, wg *syn
 	wait := time.Now()
 	queue := make([]*kafka.Message, 0, c.batchSize)
 
+loop:
 	for {
 		select {
 		case <-ctx.Done():
 			c.logger.Println(ctx.Err())
 			shutDown(nil)
-			return
+			break loop
 		case ev := <-c.Events():
 			switch e := ev.(type) {
 			case kafka.AssignedPartitions:
@@ -169,20 +171,20 @@ func (c *kafkaConsumer) Consume(ctx context.Context, producer io.Writer, wg *syn
 					var msg models.Message
 					if err := json.Unmarshal(queue[i].Value, &msg); err != nil {
 						shutDown(fmt.Errorf("could not parse message: %v", err))
-						return
+						break loop
 					}
 					messages[i] = &msg
 				}
 
 				if err := c.process(producer, messages); err != nil {
 					shutDown(fmt.Errorf("could not process batch: %v", err))
-					return
+					break loop
 				}
 
 				if !c.autoCommit {
 					if _, err := c.CommitOffsets(getOffsets(queue)); err != nil {
 						shutDown(fmt.Errorf("could not commit offsets: %v", err))
-						return
+						break loop
 					}
 				}
 
@@ -194,7 +196,7 @@ func (c *kafkaConsumer) Consume(ctx context.Context, producer io.Writer, wg *syn
 				}
 			case kafka.Error:
 				shutDown(e)
-				return
+				break loop
 			}
 		}
 	}

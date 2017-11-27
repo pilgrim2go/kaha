@@ -17,38 +17,28 @@ type Consumer interface {
 	Consume(ctx context.Context, producer io.Writer, wg *sync.WaitGroup)
 }
 
-type consumerInit func(map[string]interface{}, models.ProcessConfig, bool) (Consumer, error)
+type consumerInit func(map[string]interface{}, models.ProcessConfig, bool, *log.Logger) (Consumer, error)
 
 var regConsumers = map[string]consumerInit{}
-
-var logger *log.Logger
-
-func init() {
-	logger = models.NewLog("consumer", 0)
-}
 
 // registerConsumer add uninitialized consumer
 func registerConsumer(name string, init consumerInit) {
 	if _, ok := regConsumers[name]; ok {
-		logger.Fatalf("consumer: %s already registered", name)
+		panic(fmt.Sprintf("Consumer %s already registered", name))
 	}
 	regConsumers[name] = init
-	logger.Printf("consumer %s registered", name)
 }
 
-func CreateConsumer(name string, number int, consumerCfg map[string]interface{}, processCfg models.ProcessConfig, debug bool) (consumers []Consumer, err error) {
+func CreateConsumer(name string, consumerCfg map[string]interface{}, processCfg models.ProcessConfig, debug bool, logger *log.Logger) (consumers Consumer, err error) {
 	init, ok := regConsumers[name]
 	if !ok {
-		return nil, fmt.Errorf("consumer: %s not registered", name)
+		return nil, fmt.Errorf("%s not registered", name)
 	}
-	for i := 0; i < number; i++ {
-		consumer, err := init(consumerCfg, processCfg, debug)
-		if err != nil {
-			return nil, fmt.Errorf("could not initilize consumer %s: %v", name, err)
-		}
-		consumers = append(consumers, consumer)
+	consumer, err := init(consumerCfg, processCfg, debug, logger)
+	if err != nil {
+		return nil, fmt.Errorf("could not initilize %s: %v", name, err)
 	}
-	return consumers, nil
+	return consumer, nil
 }
 
 // processMessagesFunc type used for message processing
@@ -78,7 +68,7 @@ func processBatch(pc models.ProcessConfig, lrf *models.LogReducedFields) process
 
 			b, err := json.Marshal(msg)
 			if err != nil {
-				return fmt.Errorf("could not serialize message to json: %v", err)
+				return fmt.Errorf("could not serialize message: %v", err)
 			}
 
 			rows = append(rows, b...)

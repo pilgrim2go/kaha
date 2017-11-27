@@ -21,7 +21,7 @@ func init() {
 	registerProducer("clickhouse", newClickhouseProducer)
 }
 
-func newClickhouseProducer(config map[string]interface{}, debug bool) (producer io.Writer, err error) {
+func newClickhouseProducer(config map[string]interface{}, debug bool, logger *log.Logger) (producer io.Writer, err error) {
 	var cfgClickh models.ClickhouseConfig
 
 	buf := &bytes.Buffer{}
@@ -34,10 +34,10 @@ func newClickhouseProducer(config map[string]interface{}, debug bool) (producer 
 		return nil, err
 	}
 
-	var logger *log.Logger
+	var log *log.Logger
 
 	if debug {
-		logger = models.NewLog("clickhouse", 0)
+		log = logger
 	}
 
 	clickh := clickhouse.NewClient(&http.Client{
@@ -50,7 +50,7 @@ func newClickhouseProducer(config map[string]interface{}, debug bool) (producer 
 		cfgClickh.Node,
 		cfgClickh.RetryAttempts,
 		time.Second*time.Duration(cfgClickh.BackoffTime),
-		logger,
+		log,
 	)
 	return &clickhouseProducer{
 		Client:  clickh,

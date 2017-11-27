@@ -29,7 +29,7 @@ func init() {
 	registerConsumer(consumerName, newStdinConsumer)
 }
 
-func newStdinConsumer(config map[string]interface{}, processCfg models.ProcessConfig, debug bool) (Consumer, error) {
+func newStdinConsumer(config map[string]interface{}, processCfg models.ProcessConfig, debug bool, logger *log.Logger) (Consumer, error) {
 	var batchSize int
 
 	for k, v := range config {
@@ -50,7 +50,7 @@ func newStdinConsumer(config map[string]interface{}, processCfg models.ProcessCo
 	return &stdinConsumer{
 		batchSize: batchSize,
 		process:   process,
-		logger:    models.NewLog(consumerName, 0),
+		logger:    logger,
 	}, nil
 
 }
@@ -59,6 +59,7 @@ func (s *stdinConsumer) Consume(ctx context.Context, producer io.Writer, wg *syn
 	messages := make([]*models.Message, 0, s.batchSize)
 	stdin := read(os.Stdin) // reading from Stdin
 
+loop:
 	for {
 		select {
 		case <-ctx.Done():
@@ -68,9 +69,9 @@ func (s *stdinConsumer) Consume(ctx context.Context, producer io.Writer, wg *syn
 			if ok {
 				var msg models.Message
 				if err := json.Unmarshal(b, &msg); err != nil {
-					s.logger.Println(err)
+					s.logger.Printf("could not parse message: %v", err)
 					wg.Done()
-					return
+					break loop
 				}
 
 				messages = append(messages, &msg)
@@ -84,15 +85,16 @@ func (s *stdinConsumer) Consume(ctx context.Context, producer io.Writer, wg *syn
 				if err := s.process(producer, messages); err != nil {
 					s.logger.Println(err)
 					wg.Done()
-					return
+					break loop
 				}
 				messages = messages[:0]
 			}
 
 			if !ok {
 				// end of stdin stream
+				s.logger.Printf("EOF input consumer closed")
 				wg.Done()
-				return
+				break loop
 			}
 		}
 	}
@@ -106,6 +108,9 @@ func read(r io.Reader) <-chan []byte {
 		for scan.Scan() {
 			b := scan.Bytes()
 			bs <- b
+		}
+		if err := scan.Err(); err != nil {
+			fmt.Fprintf(os.Stderr, "failed to scan input: %v\n", err)
 		}
 	}()
 	return bs
