@@ -57,7 +57,7 @@ func newStdinConsumer(config map[string]interface{}, processCfg models.ProcessCo
 
 func (s *stdinConsumer) Consume(ctx context.Context, producer io.Writer, wg *sync.WaitGroup) {
 	messages := make([]*models.Message, 0, s.batchSize)
-	stdin := read(os.Stdin) // reading from Stdin
+	stdin := read(os.Stdin, s.logger) // reading from Stdin
 
 loop:
 	for {
@@ -100,7 +100,7 @@ loop:
 	}
 }
 
-func read(r io.Reader) <-chan []byte {
+func read(r io.Reader, logger *log.Logger) <-chan []byte {
 	bs := make(chan []byte)
 	go func() {
 		defer close(bs)
@@ -110,7 +110,7 @@ func read(r io.Reader) <-chan []byte {
 			bs <- b
 		}
 		if err := scan.Err(); err != nil {
-			fmt.Fprintf(os.Stderr, "failed to scan input: %v\n", err)
+			logger.Printf("failed to scan input: %v\n", err)
 		}
 	}()
 	return bs

@@ -2,6 +2,7 @@ package producers
 
 import (
 	"bytes"
+	"fmt"
 	"io"
 	"log"
 	"net/http"
@@ -12,13 +13,19 @@ import (
 	"github.com/mikechris/kaha/models"
 )
 
+const clickhName = "clickhouse"
+
 type clickhouseProducer struct {
 	*clickhouse.Client
 	DbTable string
 }
 
+func (c clickhouseProducer) String() string {
+	return fmt.Sprintf("%s table %s", clickhName, c.DbTable)
+}
+
 func init() {
-	registerProducer("clickhouse", newClickhouseProducer)
+	registerProducer(clickhName, newClickhouseProducer)
 }
 
 func newClickhouseProducer(config map[string]interface{}, debug bool, logger *log.Logger) (producer io.Writer, err error) {

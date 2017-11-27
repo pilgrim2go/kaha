@@ -2,7 +2,7 @@ package models
 
 // Config all
 type Config struct {
-	Consumers []ConsumerConfig `toml:"consumer"`
+	Consumers []*ConsumerConfig `toml:"consumer"`
 }
 
 type ConsumerConfig struct {

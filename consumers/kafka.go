@@ -136,7 +136,7 @@ func (c *kafkaConsumer) Consume(ctx context.Context, producer io.Writer, wg *syn
 			}
 			c.logger.Println("closed")
 		case <-time.After(time.Second * 5):
-			c.logger.Printf("timeout while closing")
+			c.logger.Println("timeout while closing")
 		}
 		wg.Done()
 	}

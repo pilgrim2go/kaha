@@ -53,7 +53,7 @@ loop:
 	for _, cfg := range cfg.Consumers {
 		consumers := make([]consumers.Consumer, cfg.Consumers)
 		for i := 0; i < cfg.Consumers; i++ {
-			consumer, err := createConsumer(&cfg, *cliDebug, models.NewLog(os.Stderr, cfg.Name, 0))
+			consumer, err := createConsumer(cfg, *cliDebug, models.NewLog(os.Stderr, cfg.Name, 0))
 
 			if err != nil {
 				logger.Println(err)
@@ -63,7 +63,10 @@ loop:
 			consumers[i] = consumer
 		}
 
-		p, err := producers.CreateProducer(cfg.ProducerConfig.Name, cfg.ProducerConfig.Config, *cliDebug, models.NewLog(os.Stderr, cfg.ProducerConfig.Name, 0))
+		p, err := producers.CreateProducer(cfg.ProducerConfig.Name,
+			cfg.ProducerConfig.Config,
+			*cliDebug,
+			models.NewLog(os.Stderr, cfg.ProducerConfig.Name, 0))
 		if err != nil {
 			logger.Println(err)
 			cancel()
@@ -75,7 +78,7 @@ loop:
 			wg.Add(1)
 			go c.Consume(ctx, p, &wg)
 		}
-		logger.Printf("started consumers %v\n", consumers)
+		logger.Printf("started consumers %v for producer %v\n", consumers, p)
 	}
 
 	wg.Wait()
