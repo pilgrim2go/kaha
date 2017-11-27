@@ -24,7 +24,7 @@ var regConsumers = map[string]consumerInit{}
 // registerConsumer add uninitialized consumer
 func registerConsumer(name string, init consumerInit) {
 	if _, ok := regConsumers[name]; ok {
-		panic(fmt.Sprintf("Consumer %s already registered", name))
+		panic(fmt.Sprintf("consumer %s already registered", name))
 	}
 	regConsumers[name] = init
 }
