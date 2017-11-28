@@ -166,7 +166,7 @@ loop:
 				}
 
 				if err := c.process(producer, messages); err != nil {
-					shutDown(fmt.Errorf("could not process batch: %v", err))
+					shutDown(fmt.Errorf("could not process messages: %v", err))
 					break loop
 				}
 

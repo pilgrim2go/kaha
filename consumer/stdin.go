@@ -84,7 +84,7 @@ loop:
 
 			if len(messages) > 0 {
 				if err := s.process(producer, messages); err != nil {
-					s.logger.Println(err)
+					s.logger.Printf("could not process messages: %v", err)
 					wg.Done()
 					break loop
 				}
@@ -93,7 +93,7 @@ loop:
 
 			if !ok {
 				// end of stdin stream
-				s.logger.Println("EOF input closed")
+				s.logger.Printf("EOF input closed\n")
 				wg.Done()
 				break loop
 			}
