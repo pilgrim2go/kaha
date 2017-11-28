@@ -158,15 +158,13 @@ func FaultTolerance(attempts int, backoff time.Duration) Decorator {
 // APIAddr adds API address to request.
 func APIAddr(apiAddr string) Decorator {
 	return func(c HTTPClient) HTTPClient {
-		return ClientFunc(func(r *http.Request) (*http.Response, error) {
+		return ClientFunc(func(r *http.Request) (res *http.Response, err error) {
 			if strings.HasPrefix(r.URL.String(), apiAddr) {
 				return c.Do(r)
 			}
-			url, err := url.Parse(apiAddr + r.URL.String())
-			if err != nil {
+			if r.URL, err = url.Parse(apiAddr + r.URL.String()); err != nil {
 				return nil, err
 			}
-			r.URL = url
 			return c.Do(r)
 		})
 	}
