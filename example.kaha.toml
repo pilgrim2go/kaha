@@ -16,6 +16,8 @@
     [consumer.process.rename_fields]
     "parent1.child2" = "parent1_child1"
     "parent2.child2" = "parent2_child2"
+    [consumer.process.submatch_values]
+    "key" = "regexp"
     [consumer.producer]
     name = "clickhouse"
     [consumer.producer.config]
@@ -35,6 +37,8 @@
     [consumer.process.rename_fields]
     "parent1.child2" = "parent1_child1"
     "parent2.child2" = "parent2_child2"
+    [consumer.process.submatch_values]
+    "key" = "regexp"
     [consumer.producer]
     name = "clickhouse"
     [consumer.producer.config]

@@ -24,7 +24,7 @@ type Config struct {
 // Process contains configuration for message mutators.
 type Process struct {
 	RenameFields   map[string]string `toml:"rename_fields"`
-	SubMatchValues map[string]string `toml:"submatch_balues"`
+	SubMatchValues map[string]string `toml:"submatch_values"`
 	RemoveFields   []string          `toml:"remove_fields"`
 	OnlyFields     []string          `toml:"only_fields"`
 }
