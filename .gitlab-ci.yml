@@ -1,6 +1,6 @@
 variables:
   GOPATH: "/workspace"
-  REPO: github.com/mikechris/kaha/clickhouse
+  REPO: github.com/mikechris/kaha
 
 stages:
   - docker
