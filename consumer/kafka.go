@@ -13,16 +13,15 @@ import (
 
 	"github.com/BurntSushi/toml"
 	"github.com/confluentinc/confluent-kafka-go/kafka"
-	"github.com/mikechris/kaha/model"
+	"github.com/mikechris/kaha/config"
+	"github.com/mikechris/kaha/message"
 )
 
-// kafkaConfig process and consumer
 type kafkaConfig struct {
 	kafkaConsumerConfig
 	kafkaConsumerConnectConfig
 }
 
-// kafkaConsumerConfig process
 type kafkaConsumerConfig struct {
 	Topics    []string `toml:"topics"`
 	Consumers int      `toml:"consumers"`
@@ -30,7 +29,6 @@ type kafkaConsumerConfig struct {
 	MaxWait   int      `toml:"max_wait_seconds"`
 }
 
-// kafkaConsumerConnectConfig consumer
 type kafkaConsumerConnectConfig struct {
 	Brokers            []string `toml:"brokers"`
 	Group              string   `toml:"group"`
@@ -40,7 +38,6 @@ type kafkaConsumerConnectConfig struct {
 	SessionTimeout     int      `toml:"session_timeout_ms"`
 }
 
-// kafkaConsumer kafkaConsumer client
 type kafkaConsumer struct {
 	*kafka.Consumer
 	process processMessagesFunc
@@ -57,7 +54,7 @@ func init() {
 	registerConsumer("kafka", newKafkaConsumer)
 }
 
-func newKafkaConsumer(config map[string]interface{}, processCfg model.ProcessConfig, debug bool, logger *log.Logger) (Consumer, error) {
+func newKafkaConsumer(config map[string]interface{}, processCfg config.Process, debug bool, logger *log.Logger) (Consumer, error) {
 	var cfgKafka kafkaConfig
 
 	buf := &bytes.Buffer{}
@@ -69,24 +66,18 @@ func newKafkaConsumer(config map[string]interface{}, processCfg model.ProcessCon
 		return nil, err
 	}
 
-	consumerCfg := newConsumerConfig(&cfgKafka.kafkaConsumerConnectConfig)
-
-	c, err := kafka.NewConsumer(consumerCfg)
-
+	c, err := kafka.NewConsumer(newConsumerConfig(&cfgKafka.kafkaConsumerConnectConfig))
 	if err != nil {
 		return nil, fmt.Errorf("could not create consumer: %s", err)
 	}
 
-	err = c.SubscribeTopics(cfgKafka.Topics, nil)
-
-	if err != nil {
+	if err := c.SubscribeTopics(cfgKafka.Topics, nil); err != nil {
 		return nil, fmt.Errorf("could not to subscribe to topics: %s %s", cfgKafka.Topics, err)
 	}
 
 	logger.SetPrefix(logger.Prefix() + c.String() + " ")
 
-	process := processBatch(processCfg, model.NewLogReducedFields(logger))
-
+	process := processBatch(processCfg, newLogReducedFields(logger))
 	if debug {
 		process = logProcessBatch(logger, process)
 	}
@@ -102,7 +93,6 @@ func newKafkaConsumer(config map[string]interface{}, processCfg model.ProcessCon
 	}, nil
 }
 
-// newConsumerConfig create new consumer config
 func newConsumerConfig(cfg *kafkaConsumerConnectConfig) *kafka.ConfigMap {
 	return &kafka.ConfigMap{
 		"bootstrap.servers":               strings.Join(cfg.Brokers, ","),
@@ -115,16 +105,15 @@ func newConsumerConfig(cfg *kafkaConsumerConnectConfig) *kafka.ConfigMap {
 		"default.topic.config":            kafka.ConfigMap{"auto.offset.reset": cfg.AutoOffsetReset}}
 }
 
-// Consume read and process messages from kafka
 func (c *kafkaConsumer) Consume(ctx context.Context, producer io.Writer, wg *sync.WaitGroup) {
 	shutDown := func(err error) {
 		if err != nil {
 			c.logger.Println(err)
 		}
-
 		c.logger.Println("trying to close")
 
 		errs := make(chan error)
+
 		go func() {
 			errs <- c.Close()
 		}()
@@ -165,10 +154,10 @@ loop:
 					continue
 				}
 
-				messages := make([]*model.Message, len(queue))
+				messages := make([]*message.Message, len(queue))
 
 				for i := 0; i < len(queue); i++ {
-					var msg model.Message
+					var msg message.Message
 					if err := json.Unmarshal(queue[i].Value, &msg); err != nil {
 						shutDown(fmt.Errorf("could not parse message: %v", err))
 						break loop

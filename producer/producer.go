@@ -10,7 +10,6 @@ type producerInit func(map[string]interface{}, bool, *log.Logger) (io.Writer, er
 
 var regConsumers = map[string]producerInit{}
 
-// registerProducer add uninitialized producer
 func registerProducer(name string, init producerInit) {
 	if _, ok := regConsumers[name]; ok {
 		panic(fmt.Sprintf("producer: %s already registered", name))
@@ -18,6 +17,7 @@ func registerProducer(name string, init producerInit) {
 	regConsumers[name] = init
 }
 
+// CreateProducer initilizes registered io.Writer producer.
 func CreateProducer(name string, config map[string]interface{}, debug bool, logger *log.Logger) (producer io.Writer, err error) {
 	init, ok := regConsumers[name]
 	if !ok {
@@ -27,6 +27,5 @@ func CreateProducer(name string, config map[string]interface{}, debug bool, logg
 	if err != nil {
 		return nil, fmt.Errorf("could not initilize producer %s: %v", name, err)
 	}
-
 	return producer, nil
 }

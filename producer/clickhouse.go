@@ -10,7 +10,6 @@ import (
 
 	"github.com/BurntSushi/toml"
 	"github.com/mikechris/kaha/clickhouse"
-	"github.com/mikechris/kaha/model"
 )
 
 const clickhName = "clickhouse"
@@ -18,6 +17,16 @@ const clickhName = "clickhouse"
 type clickhouseProducer struct {
 	*clickhouse.Client
 	DbTable string
+}
+
+// ClickhouseClientConfig contains configuration for clickhouse http client.
+type ClickhouseClientConfig struct {
+	Node          string `toml:"node"`
+	DbTable       string `toml:"db_table"`
+	TimeOut       int    `toml:"timeout_seconds"`
+	RetryAttempts int    `toml:"retry_attempts"`
+	BackoffTime   int    `toml:"backoff_time_seconds"`
+	ConnLimit     int    `toml:"conn_limit"`
 }
 
 func (c clickhouseProducer) String() string {
@@ -28,12 +37,12 @@ func init() {
 	registerProducer(clickhName, newClickhouseProducer)
 }
 
-func newClickhouseProducer(config map[string]interface{}, debug bool, logger *log.Logger) (producer io.Writer, err error) {
-	var cfgClickh model.ClickhouseConfig
+func newClickhouseProducer(cfg map[string]interface{}, debug bool, logger *log.Logger) (producer io.Writer, err error) {
+	var cfgClickh ClickhouseClientConfig
 
 	buf := &bytes.Buffer{}
 
-	if err := toml.NewEncoder(buf).Encode(config); err != nil {
+	if err := toml.NewEncoder(buf).Encode(cfg); err != nil {
 		return nil, err
 	}
 

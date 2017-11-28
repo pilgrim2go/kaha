@@ -10,18 +10,20 @@ import (
 	"sync"
 	"time"
 
-	"github.com/mikechris/kaha/model"
+	"github.com/mikechris/kaha/config"
+	"github.com/mikechris/kaha/message"
 )
 
+// Consumer should read, process and  send data to io.Writer (producer).
+// Consume should stop on event ctx.Done() and signalize end with wg.Done().
 type Consumer interface {
 	Consume(ctx context.Context, producer io.Writer, wg *sync.WaitGroup)
 }
 
-type consumerInit func(map[string]interface{}, model.ProcessConfig, bool, *log.Logger) (Consumer, error)
+type consumerInit func(map[string]interface{}, config.Process, bool, *log.Logger) (Consumer, error)
 
 var regConsumers = map[string]consumerInit{}
 
-// registerConsumer add uninitialized consumer
 func registerConsumer(name string, init consumerInit) {
 	if _, ok := regConsumers[name]; ok {
 		panic(fmt.Sprintf("consumer %s already registered", name))
@@ -29,7 +31,8 @@ func registerConsumer(name string, init consumerInit) {
 	regConsumers[name] = init
 }
 
-func CreateConsumer(name string, consumerCfg map[string]interface{}, processCfg model.ProcessConfig, debug bool, logger *log.Logger) (consumers Consumer, err error) {
+// CreateConsumer initilizes registered consumer.
+func CreateConsumer(name string, consumerCfg map[string]interface{}, processCfg config.Process, debug bool, logger *log.Logger) (consumers Consumer, err error) {
 	init, ok := regConsumers[name]
 	if !ok {
 		return nil, fmt.Errorf("%s not registered", name)
@@ -41,11 +44,11 @@ func CreateConsumer(name string, consumerCfg map[string]interface{}, processCfg 
 	return consumer, nil
 }
 
-// processMessagesFunc type used for message processing
-type processMessagesFunc func(io.Writer, []*model.Message) error
+// processMessagesFunc type used for message processing.
+type processMessagesFunc func(io.Writer, []*message.Message) error
 
-// processBatch default process function that sends bulk of messages from kafka to clichouse database table
-func processBatch(pc model.ProcessConfig, lrf *model.LogReducedFields) processMessagesFunc {
+// processBatch processes and sends bulk of messages to given producer.
+func processBatch(pc config.Process, lrf *logReducedFields) processMessagesFunc {
 	// compile regexps for submatch mutator
 	rgxps := make(map[string]*regexp.Regexp)
 	if len(pc.SubMatchValues) > 0 {
@@ -53,7 +56,7 @@ func processBatch(pc model.ProcessConfig, lrf *model.LogReducedFields) processMe
 			rgxps[field] = regexp.MustCompile(rgxpStr)
 		}
 	}
-	return func(producer io.Writer, batch []*model.Message) error {
+	return func(producer io.Writer, batch []*message.Message) error {
 		var rows []byte
 
 		for _, msg := range batch {
@@ -79,9 +82,9 @@ func processBatch(pc model.ProcessConfig, lrf *model.LogReducedFields) processMe
 	}
 }
 
-// logProcessBatch log time spend on messages processing
+// logProcessBatch log time spend by process function.
 func logProcessBatch(l *log.Logger, process processMessagesFunc) processMessagesFunc {
-	return func(producer io.Writer, messages []*model.Message) error {
+	return func(producer io.Writer, messages []*message.Message) error {
 		start := time.Now()
 		l.Printf("start processing of %d messages\n", len(messages))
 		err := process(producer, messages)
@@ -90,5 +93,30 @@ func logProcessBatch(l *log.Logger, process processMessagesFunc) processMessages
 		}
 		l.Printf("finished processing of %d messages time: %v\n", len(messages), time.Since(start))
 		return nil
+	}
+}
+
+// logReducedFields contains custom logger for message processing.
+type logReducedFields struct {
+	logged map[string]bool
+	*log.Logger
+}
+
+// LogReduced logs field only once.
+func (l *logReducedFields) LogReduced(fields map[string]interface{}) {
+	for key, value := range fields {
+		if _, ok := l.logged[key]; ok {
+			continue
+		}
+		l.Printf("reduced field %s: %v\n", key, value)
+		l.logged[key] = true
+	}
+}
+
+// newLogReducedFields creates new custom logger.
+func newLogReducedFields(l *log.Logger) *logReducedFields {
+	return &logReducedFields{
+		logged: make(map[string]bool),
+		Logger: l,
 	}
 }

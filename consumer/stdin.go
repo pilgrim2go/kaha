@@ -10,7 +10,8 @@ import (
 	"os"
 	"sync"
 
-	"github.com/mikechris/kaha/model"
+	"github.com/mikechris/kaha/config"
+	"github.com/mikechris/kaha/message"
 )
 
 type stdinConsumer struct {
@@ -29,7 +30,7 @@ func init() {
 	registerConsumer(consumerName, newStdinConsumer)
 }
 
-func newStdinConsumer(config map[string]interface{}, processCfg model.ProcessConfig, debug bool, logger *log.Logger) (Consumer, error) {
+func newStdinConsumer(config map[string]interface{}, processCfg config.Process, debug bool, logger *log.Logger) (Consumer, error) {
 	var batchSize int
 
 	for k, v := range config {
@@ -42,7 +43,7 @@ func newStdinConsumer(config map[string]interface{}, processCfg model.ProcessCon
 			batchSize = int(i)
 		}
 	}
-	process := processBatch(processCfg, model.NewLogReducedFields(logger))
+	process := processBatch(processCfg, newLogReducedFields(logger))
 
 	if debug {
 		process = logProcessBatch(logger, process)
@@ -56,7 +57,7 @@ func newStdinConsumer(config map[string]interface{}, processCfg model.ProcessCon
 }
 
 func (s *stdinConsumer) Consume(ctx context.Context, producer io.Writer, wg *sync.WaitGroup) {
-	messages := make([]*model.Message, 0, s.batchSize)
+	messages := make([]*message.Message, 0, s.batchSize)
 	stdin := read(os.Stdin, s.logger) // reading from Stdin
 
 loop:
@@ -67,7 +68,7 @@ loop:
 			return
 		case b, ok := <-stdin:
 			if ok {
-				var msg model.Message
+				var msg message.Message
 				if err := json.Unmarshal(b, &msg); err != nil {
 					s.logger.Printf("could not parse message: %v\n", err)
 					wg.Done()
@@ -92,7 +93,7 @@ loop:
 
 			if !ok {
 				// end of stdin stream
-				s.logger.Println("EOF input closed\n")
+				s.logger.Println("EOF input closed")
 				wg.Done()
 				break loop
 			}

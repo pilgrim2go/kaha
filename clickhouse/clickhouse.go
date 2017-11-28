@@ -14,12 +14,12 @@ import (
 	"time"
 )
 
-// Client client
+// Client for clickhouse HTTP interface.
 type Client struct {
 	Client HTTPClient
 }
 
-// NewClient create new client
+// NewClient creates new client with default decorators.
 func NewClient(client HTTPClient, host string, attempts int, backoff time.Duration, l *log.Logger) *Client {
 	decorators := []Decorator{
 		APIAddr(host),
@@ -33,7 +33,7 @@ func NewClient(client HTTPClient, host string, attempts int, backoff time.Durati
 	}
 }
 
-// GetColumns get column names from database table
+// GetColumns returns column names from table structure.
 func (c *Client) GetColumns(dbTableName string) (columns []string, err error) {
 	type describeTable struct {
 		Data []map[string]string `json:"data"`
@@ -56,7 +56,7 @@ func (c *Client) GetColumns(dbTableName string) (columns []string, err error) {
 	return columns, nil
 }
 
-// InsertIntoJSONEachRow Insert data to database table in JSONEachRow format
+// InsertIntoJSONEachRow inserts new data to table in JSONEachRow format.
 func (c *Client) InsertIntoJSONEachRow(dbTableName string, rows []byte) error {
 	if err := c.Do(http.MethodPost,
 		bytes.NewBuffer(rows),
@@ -68,7 +68,7 @@ func (c *Client) InsertIntoJSONEachRow(dbTableName string, rows []byte) error {
 	return nil
 }
 
-// Do Make request and if resp contains data unmarshall it to v
+// Do makes  new request and unmarshall response to v if given.
 func (c *Client) Do(httpMethod string, payload io.Reader, contentType string, v interface{}, uriFormat string, args ...interface{}) (err error) {
 	req, err := http.NewRequest(httpMethod, fmt.Sprintf(uriFormat, args...), payload)
 	req.Header.Set("Content-Type", contentType)
@@ -96,11 +96,10 @@ func (c *Client) Do(httpMethod string, payload io.Reader, contentType string, v 
 	if v == nil {
 		return nil
 	}
-
 	return json.Unmarshal(body, v)
 }
 
-// A HTTPClient sends http.Requests and returns http.Responses or errors in
+// HTTPClient sends http.Requests and returns http.Responses or errors in
 // case of failure.
 type HTTPClient interface {
 	Do(*http.Request) (*http.Response, error)
@@ -109,12 +108,12 @@ type HTTPClient interface {
 // ClientFunc is a function type that implements the Client interface.
 type ClientFunc func(*http.Request) (*http.Response, error)
 
-// Do implements Client interface
+// Do implements Client interface.
 func (f ClientFunc) Do(r *http.Request) (*http.Response, error) {
 	return f(r)
 }
 
-// A Decorator wraps a Client with extra behaviour.
+// Decorator wraps a Client with extra behaviour.
 type Decorator func(HTTPClient) HTTPClient
 
 // Logging returns a Decorator that logs a Client's requests.
@@ -156,7 +155,7 @@ func FaultTolerance(attempts int, backoff time.Duration) Decorator {
 	}
 }
 
-// APIAddr Add API address to request
+// APIAddr adds API address to request.
 func APIAddr(apiAddr string) Decorator {
 	return func(c HTTPClient) HTTPClient {
 		return ClientFunc(func(r *http.Request) (*http.Response, error) {
@@ -173,7 +172,7 @@ func APIAddr(apiAddr string) Decorator {
 	}
 }
 
-// Decorate decorates a Client c with all the given Decorators, in order
+// Decorate decorates a Client c with all the given Decorators, in order.
 func Decorate(c HTTPClient, ds ...Decorator) HTTPClient {
 	decorated := c
 	for _, decorate := range ds {

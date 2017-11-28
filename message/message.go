@@ -1,4 +1,4 @@
-package model
+package message
 
 import (
 	"fmt"
@@ -7,17 +7,17 @@ import (
 	"strings"
 )
 
-// Message for kafka's JSON unmarshall with useful mutators
+// Message represents kev-value format like JSON
 type Message map[string]interface{}
 
-// RemoveFields remove root fields by name
+// RemoveFields removes root fields by name
 func (m Message) RemoveFields(fields []string) {
 	for _, field := range fields {
 		delete(m, field)
 	}
 }
 
-// RemoveEmptyFields remove root empty fields
+// RemoveEmptyFields removes root empty fields
 func (m Message) RemoveEmptyFields() {
 	for name, value := range m {
 		if value == nil {
@@ -26,7 +26,7 @@ func (m Message) RemoveEmptyFields() {
 	}
 }
 
-// ReduceToFields leave only given fields and return removed ones
+// ReduceToFields leaves only given fields and return removed ones
 func (m Message) ReduceToFields(onlyFields []string) map[string]interface{} {
 	reduced := make(map[string]interface{})
 	for name, value := range m {
@@ -38,7 +38,7 @@ func (m Message) ReduceToFields(onlyFields []string) map[string]interface{} {
 	return reduced
 }
 
-// RenameFields rename field's name in given path
+// RenameFields renames field's name in given path
 func (m Message) RenameFields(pathName map[string]string) {
 	for path, name := range pathName {
 		if value, ok := getValueRemovePath(strings.Split(path, "."), m); ok {
@@ -47,7 +47,7 @@ func (m Message) RenameFields(pathName map[string]string) {
 	}
 }
 
-// SubMatchValues change field's value based on regexp submatch
+// SubMatchValues changes field's value based on regexp submatch
 func (m Message) SubMatchValues(nameRegexp map[string]*regexp.Regexp) error {
 	for name, rgxp := range nameRegexp {
 		if rgxp == nil {
