@@ -1,137 +1,90 @@
 package main
 
 import (
+	"bytes"
+	"context"
 	"flag"
 	"fmt"
 	"io/ioutil"
 	"log"
 	"net/http"
+	"os"
+	"os/signal"
+	"sync"
+	"syscall"
 	"time"
 
 	"github.com/BurntSushi/toml"
+	"github.com/mikechris/kaha/clickhouse"
+	"github.com/mikechris/kaha/consumers"
+	"github.com/mikechris/kaha/models"
+	"github.com/mikechris/kaha/producers"
 )
-
-// Config all
-type Config struct {
-	Kafka         KafkaConfig      `toml:"Kafka"`
-	Clickhouse    ClickhouseConfig `toml:"Clickhouse"`
-	ProcessConfig `toml:"Process"`
-}
-
-// ProcessConfig message mutate options
-type ProcessConfig struct {
-	RenameFields   map[string]string `toml:"RenameFields"`
-	SubMatchValues map[string]string `toml:"SubMatchValues"`
-	RemoveFields   []string          `toml:"remove_fields"`
-}
-
-// KafkaConfig process and consumer
-type KafkaConfig struct {
-	KafkaConsumerConfig
-	KafkaConsumerConnectConfig
-}
-
-// KafkaConsumerConfig process
-type KafkaConsumerConfig struct {
-	Topics    []string `toml:"topics"`
-	Consumers int      `toml:"consumers"`
-	Batch     int      `toml:"batch_size"`
-}
-
-// KafkaConsumerConnectConfig consumer
-type KafkaConsumerConnectConfig struct {
-	Brokers            []string `toml:"brokers"`
-	Group              string   `toml:"group"`
-	AutoCommit         bool     `toml:"auto_commit"`
-	AutoCommitInterval int      `toml:"auto_commit_interval_ms"`
-	AutoOffsetReset    string   `toml:"auto_offset_reset"`
-	SessionTimeout     int      `toml:"session_timeout_ms"`
-}
-
-// ClickhouseConfig client
-type ClickhouseConfig struct {
-	Node          string `toml:"node"`
-	DbTable       string `toml:"db_table"`
-	TimeOut       int    `toml:"timeout_seconds"`
-	RetryAttempts int    `toml:"retry_attempts"`
-	BackoffTime   int    `toml:"backoff_time_seconds"`
-}
 
 func main() {
 	cliConfig := flag.String("config", "kaha.toml", "Kaha feeder config file path")
 	cliDebug := flag.Bool("debug", false, "Debug mode")
+
 	flag.Parse()
 
-	var logger = newLog("kaha", 0)
-
-	var cfg Config
+	var logger = models.NewLog(os.Stderr, "", 0)
+	var cfg models.Config
 
 	if err := loadConfig(*cliConfig, &cfg); err != nil {
 		logger.Fatal(err)
 	}
 
-	var clickhLog *log.Logger
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
 
-	if *cliDebug {
-		clickhLog = newLog("kaha clickhouse", 0)
-	}
+	osSignals := make(chan os.Signal, 1)
+	signal.Notify(osSignals, syscall.SIGINT, syscall.SIGTERM)
 
-	clickh := NewClickhouse(&http.Client{
-		Timeout: time.Second * time.Duration(cfg.Clickhouse.TimeOut),
-		Transport: &http.Transport{
-			MaxIdleConns:        cfg.Kafka.Consumers,
-			MaxIdleConnsPerHost: cfg.Kafka.Consumers,
-		},
-	},
-		cfg.Clickhouse.Node,
-		cfg.Clickhouse.RetryAttempts,
-		time.Second*time.Duration(cfg.Clickhouse.BackoffTime),
-		clickhLog,
-	)
+	go func() {
+		sig := <-osSignals
+		logger.Printf("terminating after received signal: %v\n", sig)
+		cancel()
+	}()
 
-	consumers := make([]*Consumer, cfg.Kafka.Consumers)
+	var wg sync.WaitGroup
 
-	for i := 0; i < cfg.Kafka.Consumers; i++ {
-		consumerLog := newLog(fmt.Sprintf("kaha consumer-%v", i+1), 0)
+loop:
+	for _, cfg := range cfg.Consumers {
+		consumers := make([]consumers.Consumer, cfg.Consumers)
+		for i := 0; i < cfg.Consumers; i++ {
+			consumer, err := createConsumer(cfg, *cliDebug, models.NewLog(os.Stderr, cfg.Name, 0))
 
-		process := ProcessBatch(clickh,
-			&cfg.ProcessConfig,
-			cfg.Clickhouse.DbTable,
-			NewLogReducedFields(consumerLog))
-
-		if *cliDebug {
-			process = LogProcessBatch(consumerLog, process)
+			if err != nil {
+				logger.Println(err)
+				cancel()
+				break loop
+			}
+			consumers[i] = consumer
 		}
 
-		consumer, err := NewConsumer(
-			NewConsumerConfig(&cfg.Kafka.KafkaConsumerConnectConfig),
-			cfg.Kafka.Topics,
-			cfg.Kafka.AutoCommit,
-			cfg.Kafka.Batch,
-			process,
-			consumerLog,
-		)
+		p, err := producers.CreateProducer(cfg.ProducerConfig.Name,
+			cfg.ProducerConfig.Config,
+			*cliDebug,
+			models.NewLog(os.Stderr, cfg.ProducerConfig.Name, 0))
 		if err != nil {
-			logger.Fatal(err)
+			logger.Println(err)
+			cancel()
+			break loop
+
 		}
-		consumers[i] = consumer
+
+		for _, c := range consumers {
+			wg.Add(1)
+			go c.Consume(ctx, p, &wg)
+		}
+		logger.Printf("started consumers %v for producer %v\n", consumers, p)
 	}
 
-	RunConsumer(logger, *cliDebug, consumers...)
+	wg.Wait()
+	logger.Println("all consumers closed")
 }
 
-type logWriter struct {
-}
-
-func (writer logWriter) Write(bytes []byte) (int, error) {
-	return fmt.Print(time.Now().UTC().Format("Jan 02 15:04:05") + " " + string(bytes))
-}
-
-func newLog(name string, flag int) *log.Logger {
-	return log.New(new(logWriter), name+" ", flag)
-}
-
-func loadConfig(f string, cfg *Config) (err error) {
+func loadConfig(f string, cfg *models.Config) (err error) {
 	b, err := ioutil.ReadFile(f)
 	if err != nil {
 		return fmt.Errorf("could not read file %s: %v", f, err)
@@ -142,4 +95,46 @@ func loadConfig(f string, cfg *Config) (err error) {
 	}
 
 	return nil
+}
+
+func createConsumer(cfg *models.ConsumerConfig, debug bool, logger *log.Logger) (consumers.Consumer, error) {
+	if cfg.ProducerConfig.Name == "clickhouse" {
+		onlyFields, err := getOnlyFieldsFromClickhouse(cfg.ProducerConfig.Config, debug)
+		if err != nil {
+			return nil, err
+		}
+		cfg.ProcessConfig.OnlyFields = onlyFields
+	}
+
+	return consumers.CreateConsumer(cfg.Name, cfg.Config, cfg.ProcessConfig, debug, logger)
+}
+
+func getOnlyFieldsFromClickhouse(config map[string]interface{}, debug bool) ([]string, error) {
+	var clickhLog *log.Logger
+
+	if debug {
+		clickhLog = models.NewLog(os.Stderr, "clickhouse", 0)
+	}
+
+	var clickhConfig models.ClickhouseConfig
+
+	buf := &bytes.Buffer{}
+	if err := toml.NewEncoder(buf).Encode(config); err != nil {
+		return nil, err
+	}
+
+	if err := toml.Unmarshal(buf.Bytes(), &clickhConfig); err != nil {
+		return nil, err
+	}
+
+	clickh := clickhouse.NewClient(&http.Client{
+		Timeout: time.Second * time.Duration(clickhConfig.TimeOut),
+	},
+		clickhConfig.Node,
+		clickhConfig.RetryAttempts,
+		time.Second*time.Duration(clickhConfig.BackoffTime),
+		clickhLog,
+	)
+
+	return clickh.GetColumns(clickhConfig.DbTable)
 }

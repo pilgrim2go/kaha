@@ -1,25 +1,46 @@
-[Kafka]
-brokers = ["kafka1:9092","kafka2:9092"]
-group = "test_group"
-topics = ["example.topic_name"]
-consumers = 2
-auto_commit = false
-auto_commit_interval_ms = 5000
-auto_offset_reset = "earliest"
-session_timeout_ms = 6000
-batch_size = 10000
-
-[Clickhouse]
-node = "http://clickhouse:8123"
-db_table = "db_name.table_name"
-timeout_seconds = 15
-retry_attempts = 3
-backoff_time_seconds = 1
-
-[Process]
-remove_fields = ["field1","field2"]
-[Process.RenameFields]
-"parent.child" = "parent_child"
-[Process.SubMatchValues]
-"key" = "regexp"
-
+[[consumer]]
+    name = "kafka"
+    consumers = 2
+    [consumer.config]
+    brokers = ["kafka1", "kafka2"]
+    group = "group"
+    topics = ["topic1", "topic2"]
+    auto_commit = false
+    auto_commit_interval_ms = 5000
+    auto_offset_reset = "earliest"
+    session_timeout_ms = 6000
+    batch_size = 10000
+    max_wait_seconds = 10
+    [consumer.process]
+    remove_fields = ["field1", "field2"]
+    [consumer.process.rename_fields]
+    "parent1.child2" = "parent1_child1"
+    "parent2.child2" = "parent2_child2"
+    [consumer.producer]
+    name = "clickhouse"
+    [consumer.producer.config]
+    node = "http://localhost:8123"
+    db_table = "db.table"
+    timeout_seconds = 15
+    retry_attempts = 3
+    backoff_time_seconds = 1
+    conn_limit = 2
+[[consumer]]
+    name = "stdin"
+    consumers = 1
+    [consumer.config]
+    batch_size = 10000
+    [consumer.process]
+    remove_fields = ["field1", "field2"]
+    [consumer.process.rename_fields]
+    "parent1.child2" = "parent1_child1"
+    "parent2.child2" = "parent2_child2"
+    [consumer.producer]
+    name = "clickhouse"
+    [consumer.producer.config]
+    node = "http://localhost:8123"
+    db_table = "db.table"
+    timeout_seconds = 15
+    retry_attempts = 3
+    backoff_time_seconds = 1
+    conn_limit = 2
