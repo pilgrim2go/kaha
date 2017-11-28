@@ -83,12 +83,12 @@ func processBatch(pc models.ProcessConfig, lrf *models.LogReducedFields) process
 func logProcessBatch(l *log.Logger, process processMessagesFunc) processMessagesFunc {
 	return func(producer io.Writer, messages []*models.Message) error {
 		start := time.Now()
-		l.Printf("start processing of %d messages", len(messages))
+		l.Printf("start processing of %d messages\n", len(messages))
 		err := process(producer, messages)
 		if err != nil {
 			return err
 		}
-		l.Printf("finished processing of %d messages time: %v", len(messages), time.Since(start))
+		l.Printf("finished processing of %d messages time: %v\n", len(messages), time.Since(start))
 		return nil
 	}
 }

@@ -38,7 +38,7 @@ func (l *LogReducedFields) LogReduced(fields map[string]interface{}) {
 		if _, ok := l.logged[key]; ok {
 			continue
 		}
-		l.Printf("reduced field %s: %v", key, value)
+		l.Printf("reduced field %s: %v\n", key, value)
 		l.logged[key] = true
 	}
 }

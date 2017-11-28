@@ -122,13 +122,13 @@ func Logging(l *log.Logger) Decorator {
 	return func(c HTTPClient) HTTPClient {
 		return ClientFunc(func(r *http.Request) (resp *http.Response, err error) {
 			id := rand.Int63()
-			l.Printf("[%d] %s %s %d", id, r.Method, r.URL, r.ContentLength)
+			l.Printf("[%d] %s %s %d\n", id, r.Method, r.URL, r.ContentLength)
 			resp, err = c.Do(r)
 			if err != nil {
-				l.Printf("[%d] %v", id, err)
+				l.Printf("[%d] %v\n", id, err)
 				return resp, err
 			}
-			l.Printf("[%d] %s %s %s", id, r.Method, r.URL, resp.Status)
+			l.Printf("[%d] %s %s %s\n", id, r.Method, r.URL, resp.Status)
 			return resp, err
 		})
 	}

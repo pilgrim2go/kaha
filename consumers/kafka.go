@@ -132,7 +132,7 @@ func (c *kafkaConsumer) Consume(ctx context.Context, producer io.Writer, wg *syn
 		select {
 		case err := <-errs:
 			if err != nil {
-				c.logger.Printf("could not close: %v", err)
+				c.logger.Printf("could not close: %v\n", err)
 			}
 			c.logger.Println("closed")
 		case <-time.After(time.Second * 5):

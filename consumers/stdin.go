@@ -69,7 +69,7 @@ loop:
 			if ok {
 				var msg models.Message
 				if err := json.Unmarshal(b, &msg); err != nil {
-					s.logger.Printf("could not parse message: %v", err)
+					s.logger.Printf("could not parse message: %v\n", err)
 					wg.Done()
 					break loop
 				}
@@ -92,7 +92,7 @@ loop:
 
 			if !ok {
 				// end of stdin stream
-				s.logger.Printf("EOF input consumer closed")
+				s.logger.Println("EOF input closed\n")
 				wg.Done()
 				break loop
 			}
