@@ -1,4 +1,4 @@
-package consumers
+package consumer
 
 import (
 	"context"
@@ -10,14 +10,14 @@ import (
 	"sync"
 	"time"
 
-	"github.com/mikechris/kaha/models"
+	"github.com/mikechris/kaha/model"
 )
 
 type Consumer interface {
 	Consume(ctx context.Context, producer io.Writer, wg *sync.WaitGroup)
 }
 
-type consumerInit func(map[string]interface{}, models.ProcessConfig, bool, *log.Logger) (Consumer, error)
+type consumerInit func(map[string]interface{}, model.ProcessConfig, bool, *log.Logger) (Consumer, error)
 
 var regConsumers = map[string]consumerInit{}
 
@@ -29,7 +29,7 @@ func registerConsumer(name string, init consumerInit) {
 	regConsumers[name] = init
 }
 
-func CreateConsumer(name string, consumerCfg map[string]interface{}, processCfg models.ProcessConfig, debug bool, logger *log.Logger) (consumers Consumer, err error) {
+func CreateConsumer(name string, consumerCfg map[string]interface{}, processCfg model.ProcessConfig, debug bool, logger *log.Logger) (consumers Consumer, err error) {
 	init, ok := regConsumers[name]
 	if !ok {
 		return nil, fmt.Errorf("%s not registered", name)
@@ -42,10 +42,10 @@ func CreateConsumer(name string, consumerCfg map[string]interface{}, processCfg 
 }
 
 // processMessagesFunc type used for message processing
-type processMessagesFunc func(io.Writer, []*models.Message) error
+type processMessagesFunc func(io.Writer, []*model.Message) error
 
 // processBatch default process function that sends bulk of messages from kafka to clichouse database table
-func processBatch(pc models.ProcessConfig, lrf *models.LogReducedFields) processMessagesFunc {
+func processBatch(pc model.ProcessConfig, lrf *model.LogReducedFields) processMessagesFunc {
 	// compile regexps for submatch mutator
 	rgxps := make(map[string]*regexp.Regexp)
 	if len(pc.SubMatchValues) > 0 {
@@ -53,7 +53,7 @@ func processBatch(pc models.ProcessConfig, lrf *models.LogReducedFields) process
 			rgxps[field] = regexp.MustCompile(rgxpStr)
 		}
 	}
-	return func(producer io.Writer, batch []*models.Message) error {
+	return func(producer io.Writer, batch []*model.Message) error {
 		var rows []byte
 
 		for _, msg := range batch {
@@ -81,7 +81,7 @@ func processBatch(pc models.ProcessConfig, lrf *models.LogReducedFields) process
 
 // logProcessBatch log time spend on messages processing
 func logProcessBatch(l *log.Logger, process processMessagesFunc) processMessagesFunc {
-	return func(producer io.Writer, messages []*models.Message) error {
+	return func(producer io.Writer, messages []*model.Message) error {
 		start := time.Now()
 		l.Printf("start processing of %d messages\n", len(messages))
 		err := process(producer, messages)

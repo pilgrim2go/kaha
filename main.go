@@ -16,9 +16,9 @@ import (
 
 	"github.com/BurntSushi/toml"
 	"github.com/mikechris/kaha/clickhouse"
-	"github.com/mikechris/kaha/consumers"
-	"github.com/mikechris/kaha/models"
-	"github.com/mikechris/kaha/producers"
+	"github.com/mikechris/kaha/consumer"
+	"github.com/mikechris/kaha/model"
+	"github.com/mikechris/kaha/producer"
 )
 
 func main() {
@@ -27,8 +27,8 @@ func main() {
 
 	flag.Parse()
 
-	var logger = models.NewLog(os.Stderr, "", 0)
-	var cfg models.Config
+	var logger = model.NewLog(os.Stderr, "", 0)
+	var cfg model.Config
 
 	if err := loadConfig(*cliConfig, &cfg); err != nil {
 		logger.Fatal(err)
@@ -50,9 +50,9 @@ func main() {
 
 loop:
 	for _, cfg := range cfg.Consumers {
-		consumers := make([]consumers.Consumer, cfg.Consumers)
+		consumers := make([]consumer.Consumer, cfg.Consumers)
 		for i := 0; i < cfg.Consumers; i++ {
-			consumer, err := createConsumer(cfg, *cliDebug, models.NewLog(os.Stderr, cfg.Name, 0))
+			consumer, err := createConsumer(cfg, *cliDebug, model.NewLog(os.Stderr, cfg.Name, 0))
 
 			if err != nil {
 				logger.Println(err)
@@ -62,10 +62,10 @@ loop:
 			consumers[i] = consumer
 		}
 
-		p, err := producers.CreateProducer(cfg.ProducerConfig.Name,
+		p, err := producer.CreateProducer(cfg.ProducerConfig.Name,
 			cfg.ProducerConfig.Config,
 			*cliDebug,
-			models.NewLog(os.Stderr, cfg.ProducerConfig.Name, 0))
+			model.NewLog(os.Stderr, cfg.ProducerConfig.Name, 0))
 		if err != nil {
 			logger.Println(err)
 			cancel()
@@ -84,7 +84,7 @@ loop:
 	logger.Println("all consumers closed")
 }
 
-func loadConfig(f string, cfg *models.Config) (err error) {
+func loadConfig(f string, cfg *model.Config) (err error) {
 	b, err := ioutil.ReadFile(f)
 	if err != nil {
 		return fmt.Errorf("could not read file %s: %v", f, err)
@@ -97,7 +97,7 @@ func loadConfig(f string, cfg *models.Config) (err error) {
 	return nil
 }
 
-func createConsumer(cfg *models.ConsumerConfig, debug bool, logger *log.Logger) (consumers.Consumer, error) {
+func createConsumer(cfg *model.ConsumerConfig, debug bool, logger *log.Logger) (consumer.Consumer, error) {
 	if cfg.ProducerConfig.Name == "clickhouse" {
 		onlyFields, err := getOnlyFieldsFromClickhouse(cfg.ProducerConfig.Config, debug)
 		if err != nil {
@@ -106,17 +106,17 @@ func createConsumer(cfg *models.ConsumerConfig, debug bool, logger *log.Logger) 
 		cfg.ProcessConfig.OnlyFields = onlyFields
 	}
 
-	return consumers.CreateConsumer(cfg.Name, cfg.Config, cfg.ProcessConfig, debug, logger)
+	return consumer.CreateConsumer(cfg.Name, cfg.Config, cfg.ProcessConfig, debug, logger)
 }
 
 func getOnlyFieldsFromClickhouse(config map[string]interface{}, debug bool) ([]string, error) {
 	var clickhLog *log.Logger
 
 	if debug {
-		clickhLog = models.NewLog(os.Stderr, "clickhouse", 0)
+		clickhLog = model.NewLog(os.Stderr, "clickhouse", 0)
 	}
 
-	var clickhConfig models.ClickhouseConfig
+	var clickhConfig model.ClickhouseConfig
 
 	buf := &bytes.Buffer{}
 	if err := toml.NewEncoder(buf).Encode(config); err != nil {

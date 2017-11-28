@@ -1,4 +1,4 @@
-package consumers
+package consumer
 
 import (
 	"bytes"
@@ -13,7 +13,7 @@ import (
 
 	"github.com/BurntSushi/toml"
 	"github.com/confluentinc/confluent-kafka-go/kafka"
-	"github.com/mikechris/kaha/models"
+	"github.com/mikechris/kaha/model"
 )
 
 // kafkaConfig process and consumer
@@ -57,7 +57,7 @@ func init() {
 	registerConsumer("kafka", newKafkaConsumer)
 }
 
-func newKafkaConsumer(config map[string]interface{}, processCfg models.ProcessConfig, debug bool, logger *log.Logger) (Consumer, error) {
+func newKafkaConsumer(config map[string]interface{}, processCfg model.ProcessConfig, debug bool, logger *log.Logger) (Consumer, error) {
 	var cfgKafka kafkaConfig
 
 	buf := &bytes.Buffer{}
@@ -85,7 +85,7 @@ func newKafkaConsumer(config map[string]interface{}, processCfg models.ProcessCo
 
 	logger.SetPrefix(logger.Prefix() + c.String() + " ")
 
-	process := processBatch(processCfg, models.NewLogReducedFields(logger))
+	process := processBatch(processCfg, model.NewLogReducedFields(logger))
 
 	if debug {
 		process = logProcessBatch(logger, process)
@@ -165,10 +165,10 @@ loop:
 					continue
 				}
 
-				messages := make([]*models.Message, len(queue))
+				messages := make([]*model.Message, len(queue))
 
 				for i := 0; i < len(queue); i++ {
-					var msg models.Message
+					var msg model.Message
 					if err := json.Unmarshal(queue[i].Value, &msg); err != nil {
 						shutDown(fmt.Errorf("could not parse message: %v", err))
 						break loop

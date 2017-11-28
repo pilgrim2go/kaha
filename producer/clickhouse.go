@@ -1,4 +1,4 @@
-package producers
+package producer
 
 import (
 	"bytes"
@@ -10,7 +10,7 @@ import (
 
 	"github.com/BurntSushi/toml"
 	"github.com/mikechris/kaha/clickhouse"
-	"github.com/mikechris/kaha/models"
+	"github.com/mikechris/kaha/model"
 )
 
 const clickhName = "clickhouse"
@@ -29,7 +29,7 @@ func init() {
 }
 
 func newClickhouseProducer(config map[string]interface{}, debug bool, logger *log.Logger) (producer io.Writer, err error) {
-	var cfgClickh models.ClickhouseConfig
+	var cfgClickh model.ClickhouseConfig
 
 	buf := &bytes.Buffer{}
 

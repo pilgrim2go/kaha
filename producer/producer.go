@@ -1,4 +1,4 @@
-package producers
+package producer
 
 import (
 	"fmt"
