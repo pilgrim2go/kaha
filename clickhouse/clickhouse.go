@@ -172,7 +172,7 @@ func APIAddr(apiAddr string) Decorator {
 	}
 }
 
-// Decorate decorates a Client c with all the given Decorators, in order.
+// Decorate decorates HTTPClient with all the given Decorators, in order.
 func Decorate(c HTTPClient, ds ...Decorator) HTTPClient {
 	decorated := c
 	for _, decorate := range ds {
