@@ -34,8 +34,7 @@ func main() {
 		logger.Fatal(err)
 	}
 
-	ctx := context.Background()
-	ctx, cancel := context.WithCancel(ctx)
+	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
 	osSignals := make(chan os.Signal, 1)
