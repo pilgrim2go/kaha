@@ -84,7 +84,12 @@ loop:
 
 		for _, c := range consumers {
 			wg.Add(1)
-			go c.Consume(ctx, p, &wg)
+			go func(c consumer.Consumer) {
+				if err := c.Consume(ctx, p); err != nil {
+					logger.Print(err)
+				}
+				wg.Done()
+			}(c)
 		}
 		logger.Printf("started consumers %v for producer %v\n", consumers, p)
 	}

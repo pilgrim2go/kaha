@@ -7,7 +7,6 @@ import (
 	"io"
 	"log"
 	"regexp"
-	"sync"
 	"time"
 
 	"github.com/mikechris/kaha/config"
@@ -17,7 +16,7 @@ import (
 // Consumer should read, process and  send data to io.Writer (producer).
 // Consume should stop on event ctx.Done() and signalize end with wg.Done().
 type Consumer interface {
-	Consume(ctx context.Context, producer io.Writer, wg *sync.WaitGroup)
+	Consume(ctx context.Context, producer io.Writer) error
 }
 
 type consumerInit func(map[string]interface{}, config.Process, bool, *log.Logger) (Consumer, error)

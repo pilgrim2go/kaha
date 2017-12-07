@@ -8,7 +8,6 @@ import (
 	"io"
 	"log"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/BurntSushi/toml"
@@ -105,13 +104,8 @@ func newConsumerConfig(cfg *kafkaConsumerConnectConfig) *kafka.ConfigMap {
 		"default.topic.config":            kafka.ConfigMap{"auto.offset.reset": cfg.AutoOffsetReset}}
 }
 
-func (c *kafkaConsumer) Consume(ctx context.Context, producer io.Writer, wg *sync.WaitGroup) {
-	shutDown := func(err error) {
-		if err != nil {
-			c.logger.Println(err)
-		}
-		c.logger.Println("trying to close")
-
+func (c *kafkaConsumer) Consume(ctx context.Context, producer io.Writer) error {
+	shutDown := func() {
 		errs := make(chan error)
 
 		go func() {
@@ -127,19 +121,16 @@ func (c *kafkaConsumer) Consume(ctx context.Context, producer io.Writer, wg *syn
 		case <-time.After(time.Second * 5):
 			c.logger.Println("timeout while closing")
 		}
-		wg.Done()
 	}
 
 	wait := time.Now()
 	queue := make([]*kafka.Message, 0, c.batchSize)
 
-loop:
 	for {
 		select {
 		case <-ctx.Done():
-			c.logger.Println(ctx.Err())
-			shutDown(nil)
-			break loop
+			shutDown()
+			return fmt.Errorf("close: %v", ctx.Err())
 		case ev := <-c.Events():
 			switch e := ev.(type) {
 			case kafka.AssignedPartitions:
@@ -159,21 +150,21 @@ loop:
 				for i := 0; i < len(queue); i++ {
 					var msg message.Message
 					if err := json.Unmarshal(queue[i].Value, &msg); err != nil {
-						shutDown(fmt.Errorf("could not parse message: %v", err))
-						break loop
+						shutDown()
+						return fmt.Errorf("could not parse message: %v", err)
 					}
 					messages[i] = &msg
 				}
 
 				if err := c.process(producer, messages); err != nil {
-					shutDown(fmt.Errorf("could not process messages: %v", err))
-					break loop
+					shutDown()
+					return fmt.Errorf("could not process messages: %v", err)
 				}
 
 				if !c.autoCommit {
 					if _, err := c.CommitOffsets(getOffsets(queue)); err != nil {
-						shutDown(fmt.Errorf("could not commit offsets: %v", err))
-						break loop
+						shutDown()
+						return fmt.Errorf("could not commit offsets: %v", err)
 					}
 				}
 
@@ -184,8 +175,8 @@ loop:
 					c.logger.Printf("reached %v\n", e)
 				}
 			case kafka.Error:
-				shutDown(e)
-				break loop
+				shutDown()
+				return e
 			}
 		}
 	}

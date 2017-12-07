@@ -4,11 +4,11 @@ import (
 	"bufio"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"log"
 	"os"
-	"sync"
 
 	"github.com/mikechris/kaha/config"
 	"github.com/mikechris/kaha/message"
@@ -56,23 +56,19 @@ func newStdinConsumer(config map[string]interface{}, processCfg config.Process, 
 
 }
 
-func (s *stdinConsumer) Consume(ctx context.Context, producer io.Writer, wg *sync.WaitGroup) {
+func (s *stdinConsumer) Consume(ctx context.Context, producer io.Writer) error {
 	messages := make([]*message.Message, 0, s.batchSize)
 	stdin := read(os.Stdin, s.logger) // reading from Stdin
 
-loop:
 	for {
 		select {
 		case <-ctx.Done():
-			wg.Done()
-			return
+			return fmt.Errorf("close: %v", ctx.Err())
 		case b, ok := <-stdin:
 			if ok {
 				var msg message.Message
 				if err := json.Unmarshal(b, &msg); err != nil {
-					s.logger.Printf("could not parse message: %v\n", err)
-					wg.Done()
-					break loop
+					return fmt.Errorf("could not parse message: %v", err)
 				}
 
 				messages = append(messages, &msg)
@@ -84,18 +80,14 @@ loop:
 
 			if len(messages) > 0 {
 				if err := s.process(producer, messages); err != nil {
-					s.logger.Printf("could not process messages: %v", err)
-					wg.Done()
-					break loop
+					return fmt.Errorf("could not process messages: %v", err)
 				}
 				messages = messages[:0]
 			}
 
 			if !ok {
 				// end of stdin stream
-				s.logger.Printf("EOF input closed\n")
-				wg.Done()
-				break loop
+				return errors.New("EOF input closed")
 			}
 		}
 	}
