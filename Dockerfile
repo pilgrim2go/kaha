@@ -16,7 +16,7 @@ WORKDIR $GOPATH/src/github.com/mikechris/kaha
 
 COPY . ./
 
-RUN GOOS=linux go build -ldflags "-X main.version=`date -u +%Y%m%d.%H%M%S`" -tags static -o /myka .
+RUN GOOS=linux go build -ldflags "-X main.version=`date -u +%Y%m%d.%H%M%S`" -tags static -o /kaha .
 
 FROM debian:stretch-slim
 
@@ -25,6 +25,6 @@ RUN \
     apt-get install -y librdkafka1 && \
     rm -fr /tmp/* /var/tmp/* /var/lib/apt/lists/*
 
-COPY --from=builder /myka /bin/kaha
+COPY --from=builder /kaha /bin/kaha
 
 ENTRYPOINT ["/bin/kaha"]
