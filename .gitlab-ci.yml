@@ -8,5 +8,5 @@ build:
   - docker rm --force --volumes $CI_COMMIT_SHA
   artifacts:
     paths:
-      - myka
+      - kaha
     expire_in: 1 day
