@@ -22,10 +22,19 @@ import (
 	"github.com/mikechris/kaha/producer"
 )
 
+var version string
+
 func main() {
 	cliConfig := flag.String("config", "kaha.toml", "Kaha feeder config file path")
 	cliDebug := flag.Bool("debug", false, "Debug mode")
+	cliVersion := flag.Bool("version", false, "Print program version")
+
 	flag.Parse()
+
+	if *cliVersion == true {
+		fmt.Printf("Compiled: %s\n", version)
+		os.Exit(0)
+	}
 
 	var logger = newLog(os.Stderr, "", 0)
 

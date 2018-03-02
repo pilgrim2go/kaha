@@ -1,31 +1,12 @@
-variables:
-  GOPATH: "/workspace"
-  REPO: github.com/mikechris
-
-stages:
-  - docker
-  - build
-
-build-docker-image:
-  stage: docker
+build:
   tags:
   - docker-build
   script:
   - docker build -t $CI_REGISTRY_IMAGE:$CI_COMMIT_REF_NAME .
-
-build-golang-1.9:
-  stage: build
-  image: $CI_REGISTRY_IMAGE:$CI_COMMIT_REF_NAME 
-  tags:
-    - docker-build
-  script:
-    - export GOPATH=$GOPATH
-    - mkdir -p $GOPATH/src/$REPO
-    - cd $GOPATH/src/$REPO
-    - ln -s $CI_PROJECT_DIR .
-    - cd $CI_PROJECT_NAME
-    - go build
+  - docker create --name $CI_COMMIT_SHA $CI_REGISTRY_IMAGE:$CI_COMMIT_REF_NAME
+  - docker cp $CI_COMMIT_SHA:/bin/myka  .
+  - docker rm --force --volumes $CI_COMMIT_SHA
   artifacts:
     paths:
-      - kaha
+      - myka
     expire_in: 1 day

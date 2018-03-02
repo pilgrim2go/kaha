@@ -1,35 +1,30 @@
-FROM debian:jessie
-
-ENV LIBRDKAFKA_TAG=v0.11.1
-ENV GOLANG_VERSION=1.9.2
+FROM golang:1.10 AS builder
 
 RUN \
     apt-get update && \
-    apt-get install -y \
-                        build-essential \
-                        git-core \
-                        libsasl2-dev \
-                        libssl-dev \
-                        pkg-config \
-                        python \
-                        wget \
-                        zlib1g-dev
+    apt-get install -y build-essential
+
+RUN git clone https://github.com/edenhill/librdkafka
 
 RUN \
-    git clone -b $LIBRDKAFKA_TAG https://github.com/edenhill/librdkafka && \
     cd librdkafka && \
     ./configure && \
     make && \
-    make install && \
-    cd .. && \
-    rm -fr librdkafka
+    make install
+
+WORKDIR $GOPATH/src/github.com/mikechris/kaha
+
+COPY . ./
+
+RUN GOOS=linux go build -ldflags "-X main.version=`date -u +%Y%m%d.%H%M%S`" -tags static -o /myka .
+
+FROM debian:stretch-slim
 
 RUN \
-    wget https://redirector.gvt1.com/edgedl/go/go$GOLANG_VERSION.linux-amd64.tar.gz && \
-    tar -C /usr/local -xzf go$GOLANG_VERSION.linux-amd64.tar.gz && \
-    rm -f go$GOLANG_VERSION.linux-amd64.tar.gz
+    apt-get update && \
+    apt-get install -y librdkafka1 && \
+    rm -fr /tmp/* /var/tmp/* /var/lib/apt/lists/*
 
-ENV PATH=/usr/local/go/bin:$PATH
-ENV GOPATH=/gowork
+COPY --from=builder /myka /bin/kaha
 
-WORKDIR /gowork/src/kaha
+ENTRYPOINT ["/bin/kaha"]
