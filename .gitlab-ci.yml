@@ -4,7 +4,7 @@ build:
   script:
   - docker build -t $CI_REGISTRY_IMAGE:$CI_COMMIT_REF_NAME .
   - docker create --name $CI_COMMIT_SHA $CI_REGISTRY_IMAGE:$CI_COMMIT_REF_NAME
-  - docker cp $CI_COMMIT_SHA:/bin/myka  .
+  - docker cp $CI_COMMIT_SHA:/bin/kaha  .
   - docker rm --force --volumes $CI_COMMIT_SHA
   artifacts:
     paths:
