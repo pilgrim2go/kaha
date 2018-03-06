@@ -4,7 +4,7 @@ RUN \
     apt-get update && \
     apt-get install -y build-essential
 
-RUN git clone https://github.com/edenhill/librdkafka
+RUN git clone -b v0.11.3 https://github.com/edenhill/librdkafka
 
 RUN \
     cd librdkafka && \
