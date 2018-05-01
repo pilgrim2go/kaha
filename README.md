@@ -71,15 +71,12 @@ docker build -t kaha .
 ```
 
 # Run
-## Default (reads "kaha.toml" file from current directory)
+## CLI
+Show kaha cli help
 ```
-kaha
+kaha -h
 ```
-## Custom config file
+## Docker
 ```
-kaha -config configfile.toml
-```
-## Debug - more verbose logging
-```
-kaha -debug
+docker run -v $PWD/kaha.toml:/etc/kaha.toml kaha -config /etc/kaha.toml
 ```
