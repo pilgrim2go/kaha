@@ -8,9 +8,7 @@
 Run in repo main directory
 ```
 docker build -t kaha .
-docker run -v $PWD:/gowork/src/kaha --rm -it kaha go build
 ```
-Binary file: "kaha" will be created in current directory
 
 ## Manual
 * install librdkafka library
