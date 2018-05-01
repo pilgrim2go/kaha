@@ -2,7 +2,7 @@
 
 ## Dependencies
 * librdkafa v0.11.1 (https://github.com/edenhill/librdkafka/tree/v0.11.1)
-* golang 1.9 (tested on 1.9.2)
+* golang 1.10
 
 ## Using Docker - binary build for Linux x64 (tested on Debian Jessie)
 Run in repo main directory
@@ -28,10 +28,10 @@ Binary file: "kaha" will be created in current directory
     group = "group"
     topics = ["topic1", "topic2"]
     auto_commit = false true/false If true the consumer's offset will be periodically committed in the background by kafka, if false by kaha
-    auto_commit_interval_ms = 5000 # How often offset will be commited by kafka If auto_commit is enabled 
-    auto_offset_reset = "earliest" # Initial offset: latest, earliest, none 
-    session_timeout_ms = 6000  # Timeout used to detect consumer failures 
-    batch_size = 10000 # Number of messages for bulk processing 
+    auto_commit_interval_ms = 5000 # How often offset will be commited by kafka If auto_commit is enabled
+    auto_offset_reset = "earliest" # Initial offset: latest, earliest, none
+    session_timeout_ms = 6000  # Timeout used to detect consumer failures
+    batch_size = 10000 # Number of messages for bulk processing
     max_wait_seconds = 10 # How many seconds wait for batch
     [consumer.process]
     remove_fields = ["field1", "field2"] # Name of keys that should be removed e.g. ["field1","field2"] means -> {"field1": "value", "field2: "value", "field3": "value"} will be transformed to {"field3": value"}
